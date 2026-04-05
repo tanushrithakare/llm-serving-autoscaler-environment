@@ -266,7 +266,7 @@ async def run_live_demo(task: str = Query("easy", pattern="^(easy|medium|hard)$"
         # 1. Reset Global Env with selected task
         obs = _env.reset(task=task)
         steps = 0
-        max_steps = 200 # Run for 200 steps for a snappy 20-second demo
+        max_steps = 500 # Run for 500 steps for a substantial 50-second demo
         
         while steps < max_steps:
             # 2. Get baseline action
@@ -278,7 +278,7 @@ async def run_live_demo(task: str = Query("easy", pattern="^(easy|medium|hard)$"
             steps += 1
             
             # 4. Critical: Yield control to the event loop so /state can be served
-            await asyncio.sleep(0.05) # ~20 steps per second pace
+            await asyncio.sleep(0.1) # 10 steps per second pace
             
             if done:
                 break

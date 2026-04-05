@@ -41,7 +41,7 @@ from models import LLMServeAction, LLMServeObs
 # Configuration (from environment variables)
 # ---------------------------------------------------------------------------
 
-IMAGE_NAME = os.getenv("IMAGE_NAME", "llm-env")
+IMAGE_NAME = os.getenv("IMAGE_NAME", "llm-serving-autoscaler-environment")
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY")
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
