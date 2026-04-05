@@ -13,8 +13,9 @@ POST /grade                        — run full grader with baseline
 from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-import sys
+import asyncio
 import os
+import sys
 
 # Ensure the root directory is on the path for Docker runtime
 sys.path.append(os.getcwd())
@@ -31,7 +32,7 @@ from baseline import BaselineAgent
 app = FastAPI(
     title       = "LLM Serving Autoscaler Environment",
     description = "OpenEnv-compatible RL environment for GPU autoscaling.",
-    version     = "1.0.0",
+    version     = "1.0.1",
 )
 
 # Singleton environment (one session per server process)
@@ -41,6 +42,9 @@ _baseline = BaselineAgent()
 
 # Track the last action for UI visibility
 _last_action = None
+
+# A flag to prevent concurrent demo runs
+_is_demo_running = False
 
 # ---------------------------------------------------------------------------
 # UI Dashboard (HTML/JS)
@@ -80,8 +84,8 @@ DASHBOARD_HTML = """
                 <p class="text-gray-400 mt-1">OpenEnv Real-Time Telemetry Gateway</p>
             </div>
             <div class="flex items-center gap-4">
-                <button onclick="runDemo()" id="demo-btn" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-sm transition-all shadow-lg hover:scale-105">
-                    🚀 Run Baseline Demo
+                <button onclick="runLiveDemo()" id="demo-btn" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-sm transition-all shadow-lg hover:scale-105">
+                    🚀 Launch Baseline Agent
                 </button>
                 <div class="flex items-center gap-3">
                     <div id="status-dot" class="w-3 h-3 rounded-full bg-green-500 pulse"></div>
@@ -90,37 +94,11 @@ DASHBOARD_HTML = """
             </div>
         </header>
 
-        <script>
-            async function runDemo() {
-                const btn = document.getElementById('demo-btn');
-                btn.disabled = true;
-                btn.innerText = '⚡ Agent Running...';
-                btn.classList.replace('bg-blue-600', 'bg-gray-700');
-                
-                try {
-                    // Trigger a grade cycle using the baseline agent
-                    const res = await fetch('/grade', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ task: 'medium' })
-                    });
-                    const data = await res.json();
-                    alert("Demo Complete! Baseline Score: " + (data.score * 100).toFixed(1) + "%");
-                } catch (e) {
-                    console.error(e);
-                } finally {
-                    btn.disabled = false;
-                    btn.innerText = '🚀 Run Baseline Demo';
-                    btn.classList.replace('bg-gray-700', 'bg-blue-600');
-                }
-            }
-        </script>
-
         <!-- AGENT DECISION PANEL -->
-        <h3 class="text-white text-sm font-bold uppercase tracking-widest mb-4 ml-1">🧠 Agent Decision <span class="text-gray-500 font-normal">(Last Action)</span></h3>
-        <div class="decision-card grid grid-cols-3 gap-4 text-center mb-10 shadow-xl">
+        <h3 class="text-white text-sm font-bold uppercase tracking-widest mb-4 ml-1">🧠 Agent Decision <span class="text-gray-500 font-normal">(Real-Time)</span></h3>
+        <div class="decision-card grid grid-cols-3 gap-8 text-center mb-10 shadow-2xl">
             <div class="border-r border-gray-700">
-                <div class="decision-label">Scale Action</div>
+                <div class="decision-label">Node Action</div>
                 <div id="dec-scale" class="decision-value">--</div>
             </div>
             <div class="border-r border-gray-700">
@@ -135,19 +113,19 @@ DASHBOARD_HTML = """
 
         <h3 class="text-white text-sm font-bold uppercase tracking-widest mb-4 ml-1">📡 Live System State</h3>
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10 text-center">
-            <div class="card p-6">
+            <div class="card p-6 border-l-4 border-blue-500">
                 <p class="text-xs uppercase tracking-widest text-gray-400 mb-2">Active GPUs</p>
                 <p id="gpu-count" class="stat-value mono">--</p>
             </div>
-            <div class="card p-6">
+            <div class="card p-6 border-l-4 border-purple-500">
                 <p class="text-xs uppercase tracking-widest text-gray-400 mb-2">Request Queue</p>
                 <p id="queue-len" class="stat-value mono">--</p>
             </div>
-            <div class="card p-6">
+            <div class="card p-6 border-l-4 border-yellow-500">
                 <p class="text-xs uppercase tracking-widest text-gray-400 mb-2">Avg Latency</p>
                 <p id="latency" class="stat-value mono">-- ms</p>
             </div>
-            <div class="card p-6">
+            <div class="card p-6 border-l-4 border-green-500">
                 <p class="text-xs uppercase tracking-widest text-gray-400 mb-2">Current Load</p>
                 <p id="load" class="stat-value mono">-- %</p>
             </div>
@@ -189,7 +167,6 @@ DASHBOARD_HTML = """
 
         async function updateStats() {
             try {
-                // 1. Get State
                 const resState = await fetch('/state');
                 const data = await resState.json();
                 
@@ -198,10 +175,9 @@ DASHBOARD_HTML = """
                 document.getElementById('latency').innerText = data.avg_latency.toFixed(0);
                 document.getElementById('load').innerText = (data.cache_load * 100).toFixed(0);
 
-                // 2. Get Last Action
                 const resAction = await fetch('/last_action');
                 const act = await resAction.json();
-                if (act) {
+                if (act && act.batch_size > 0) {
                     const scaleEl = document.getElementById('dec-scale');
                     scaleEl.innerText = act.scale > 0 ? "+1" : (act.scale < 0 ? "-1" : "0");
                     scaleEl.style.color = act.scale > 0 ? "#22c55e" : (act.scale < 0 ? "#ef4444" : "#facc15");
@@ -216,6 +192,38 @@ DASHBOARD_HTML = """
                 if (labels.length > MAX_DATA_POINTS) { labels.shift(); latencyData.shift(); gpuData.shift(); }
                 chartL.update('none'); chartG.update('none');
             } catch (e) { console.error(e); }
+        }
+
+        async function runLiveDemo() {
+            const btn = document.getElementById('demo-btn');
+            const dot = document.getElementById('status-dot');
+            const status = document.getElementById('status-text');
+
+            btn.disabled = true;
+            btn.innerText = '⚡ AGENT SIMULATING...';
+            btn.classList.replace('bg-blue-600', 'bg-gray-700');
+            dot.classList.replace('bg-green-500', 'bg-blue-500');
+            status.innerText = 'EPISODE IN PROGRESS';
+            status.style.color = '#3b82f6';
+
+            try {
+                const res = await fetch('/run_live_demo', { method: 'POST' });
+                const result = await res.json();
+                if (result.status === 'ok') {
+                    alert('Simulation Complete! Baseline score achieved: ' + (result.score * 100).toFixed(1) + '%');
+                } else {
+                    alert('Error: ' + result.detail);
+                }
+            } catch (e) {
+                alert('Connection failure during simulation.');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = '🚀 Launch Baseline Agent';
+                btn.classList.replace('bg-gray-700', 'bg-blue-600');
+                dot.classList.replace('bg-blue-500', 'bg-green-500');
+                status.innerText = 'SYSTEM READY';
+                status.style.color = '#22c55e';
+            }
         }
 
         setInterval(updateStats, 1000); updateStats();
@@ -233,8 +241,50 @@ async def dashboard():
 def get_last_action():
     """Return the last action processed by the server."""
     if _last_action is None:
-        return LLMServeAction(scale=0, batch_size=32, spot_allocation=0.0)
+        return LLMServeAction(scale=0, batch_size=0, spot_allocation=0.0)
     return _last_action
+
+@app.post("/run_live_demo", summary="Start a non-blocking animated simulation")
+async def run_live_demo():
+    """
+    Runs a live episode update using the baseline agent. 
+    Pauses between steps to allow the dashboard to poll for real-time data.
+    """
+    global _is_demo_running, _last_action
+    
+    if _is_demo_running:
+        return {"status": "error", "detail": "A demo is already in progress."}
+    
+    _is_demo_running = True
+    try:
+        # 1. Reset Global Env
+        obs = _env.reset(task="medium")
+        steps = 0
+        max_steps = 200 # Run for 200 steps for a snappy 20-second demo
+        
+        while steps < max_steps:
+            # 2. Get baseline action
+            action = _baseline(obs)
+            _last_action = action
+            
+            # 3. Step Global Env
+            obs, reward, done, info = _env.step(action)
+            steps += 1
+            
+            # 4. Critical: Yield control to the event loop so /state can be served
+            await asyncio.sleep(0.05) # ~20 steps per second pace
+            
+            if done:
+                break
+        
+        stats = _env.episode_stats()
+        score = _grader._compute_score(stats)
+        return {"status": "ok", "score": score}
+        
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+    finally:
+        _is_demo_running = False
 
 
 # ---------------------------------------------------------------------------
@@ -307,7 +357,7 @@ def state():
 @app.get("/health", summary="Liveness check")
 def health():
     """Simple health probe."""
-    return {"status": "ok", "version": "1.0.0"}
+    return {"status": "ok", "version": "1.0.1"}
 
 
 @app.post("/grade", response_model=GradeResponse, summary="Grade the baseline agent")
