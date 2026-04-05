@@ -145,4 +145,4 @@ We provide two distinct monitoring layers:
 * [ ] **Multi-Region Cluster**: Simulating cross-region latency between GPU nodes.
 
 ---
-Built for the **OpenEnv 2026 Hackathon**
+
