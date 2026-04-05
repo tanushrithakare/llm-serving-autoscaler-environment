@@ -12,6 +12,11 @@ POST /grade                        — run full grader with baseline
 
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
+import sys
+import os
+
+# Ensure the root directory is on the path for Docker runtime
+sys.path.append(os.getcwd())
 
 from environment import LLMServeEnv
 from models import LLMServeAction, LLMServeObs
