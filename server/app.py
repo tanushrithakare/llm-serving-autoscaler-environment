@@ -293,12 +293,13 @@ async def run_live_demo(task: str = Query("easy", pattern="^(easy|medium|hard)$"
     Runs a live episode update using the baseline agent. 
     Pauses between steps to allow the dashboard to poll for real-time data.
     """
-    global _is_demo_running, _last_action
+    global _is_demo_running, _last_action, _last_reward
     
     if _is_demo_running:
         return {"status": "error", "detail": "A demo is already in progress."}
     
     _is_demo_running = True
+    _last_reward = 0.0 # Reset reward visibility at start of demo
     try:
         # 1. Reset Global Env with selected task
         obs = _env.reset(task=task)
@@ -362,6 +363,9 @@ def reset(task: str = Query("easy", pattern="^(easy|medium|hard)$")):
 
     - **task**: difficulty level — `easy`, `medium`, or `hard`
     """
+    global _last_reward, _last_action
+    _last_reward = 0.0
+    _last_action = None
     obs = _env.reset(task=task)
     return obs
 
@@ -373,7 +377,7 @@ def step(action: LLMServeAction):
 
     Returns the new observation, reward, done flag, and debug info.
     """
-    global _last_action
+    global _last_action, _last_reward
     _last_action = action
     
     try:
