@@ -40,8 +40,9 @@ _env     = LLMServeEnv()
 _grader  = LLMServeGrader()
 _baseline = BaselineAgent()
 
-# Track the last action for UI visibility
+# Track the last action and reward for UI visibility
 _last_action = None
+_last_reward = 0.0
 
 # A flag to prevent concurrent demo runs
 _is_demo_running = False
@@ -131,8 +132,17 @@ DASHBOARD_HTML = """
                 <p id="latency" class="stat-value mono">-- ms</p>
             </div>
             <div class="card p-6 border-l-4 border-green-500">
-                <p class="text-xs uppercase tracking-widest text-gray-400 mb-2">Current Load</p>
+                <p class="text-xs uppercase tracking-widest text-gray-400 mb-2">Cluster Efficiency</p>
                 <p id="load" class="stat-value mono">-- %</p>
+            </div>
+        </div>
+
+        <!-- LIVE REWARD PANEL -->
+        <div class="card p-4 bg-black border-dashed border-2 border-gray-700 text-center mb-10">
+            <p class="text-[10px] uppercase tracking-[0.2em] text-gray-500 mb-1">Live Agent Reinforcement Signal</p>
+            <div class="flex justify-center items-center gap-4">
+                <span id="rew-label" class="text-xs font-bold text-gray-400">Step Reward:</span>
+                <span id="rew-value" class="text-2xl font-black mono text-white">0.00</span>
             </div>
         </div>
 
@@ -182,6 +192,13 @@ DASHBOARD_HTML = """
 
                 const resAction = await fetch('/last_action');
                 const act = await resAction.json();
+
+                const resRew = await fetch('/live_reward');
+                const rewData = await resRew.json();
+                const rVal = rewData.reward;
+                const rEl = document.getElementById('rew-value');
+                rEl.innerText = (rVal >= 0 ? "+" : "") + rVal.toFixed(2);
+                rEl.style.color = rVal > 0.1 ? "#22c55e" : (rVal < -0.1 ? "#ef4444" : "#e2e8f0");
                 if (act && act.batch_size > 0) {
                     const scaleEl = document.getElementById('dec-scale');
                     scaleEl.innerText = act.scale > 0 ? "+1" : (act.scale < 0 ? "-1" : "0");
@@ -276,6 +293,7 @@ async def run_live_demo(task: str = Query("easy", pattern="^(easy|medium|hard)$"
             
             # 3. Step Global Env
             obs, reward, done, info = _env.step(action)
+            _last_reward = reward
             steps += 1
             
             # 4. Critical: Yield control to the event loop so /state can be served
@@ -365,6 +383,12 @@ def state():
 def health():
     """Simple health probe."""
     return {"status": "ok", "version": "1.0.1"}
+
+
+@app.get("/live_reward", summary="Read last reward signal")
+def get_live_reward():
+    """Return the last reward processed by the server."""
+    return {"reward": _last_reward}
 
 
 @app.post("/grade", response_model=GradeResponse, summary="Grade the baseline agent")
