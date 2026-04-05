@@ -247,7 +247,8 @@ async def dashboard():
 def get_last_action():
     """Return the last action processed by the server."""
     if _last_action is None:
-        return LLMServeAction(scale=0, batch_size=0, spot_allocation=0.0)
+        # Default starting state for the dashboard before first action
+        return LLMServeAction(scale=0, batch_size=64, spot_allocation=0.0)
     return _last_action
 
 @app.post("/run_live_demo", summary="Start a non-blocking animated simulation")
