@@ -21,6 +21,7 @@ dependencies = [
     "pandas>=2.0.0",
     "plotly>=5.18.0",
     "python-dotenv>=1.2.2",
+    "huggingface-hub>=1.9.0",
 ]
 
 [project.scripts]
