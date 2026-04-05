@@ -1,4 +1,4 @@
-name: llm-serving-autoscaler
+name: llm-serving-autoscaler-environment
 version: "1.0.0"
 description: >
   OpenEnv-compatible RL environment simulating an AI request serving system
