@@ -1,6 +1,6 @@
 ---
 title: LLM Serving Autoscaler
-emoji: cluster
+emoji: 🤖
 colorFrom: blue
 colorTo: green
 sdk: docker
