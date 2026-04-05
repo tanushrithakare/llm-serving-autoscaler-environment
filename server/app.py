@@ -1,5 +1,5 @@
 """
-app.py — FastAPI server exposing the LLM Serving Autoscaler Environment.
+app.py — FastAPI server (Live Ops Center v1.1 - Final Recovery)
 
 Endpoints
 ---------
