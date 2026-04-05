@@ -35,7 +35,7 @@ load_dotenv()
 from openai import OpenAI
 
 from client import LLMAutoscalerEnv
-from src.models import LLMServeAction, LLMServeObs
+from models import LLMServeAction, LLMServeObs
 
 # ---------------------------------------------------------------------------
 # Configuration (from environment variables)

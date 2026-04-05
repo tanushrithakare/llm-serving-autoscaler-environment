@@ -9,7 +9,7 @@ Implements LLMServeEnv with:
 
 import math
 import numpy as np
-from src.models import LLMServeObs, LLMServeAction
+from models import LLMServeObs, LLMServeAction
 
 # ---------------------------------------------------------------------------
 # Constants

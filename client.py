@@ -16,7 +16,7 @@ from typing import Optional
 
 import httpx
 
-from src.models import LLMServeObs, LLMServeAction
+from models import LLMServeObs, LLMServeAction
 
 
 # ---------------------------------------------------------------------------

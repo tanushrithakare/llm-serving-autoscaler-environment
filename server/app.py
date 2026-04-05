@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 
 from src.environment import LLMServeEnv
-from src.models import LLMServeAction, LLMServeObs
+from models import LLMServeAction, LLMServeObs
 from src.grader import LLMServeGrader
 from src.baseline import BaselineAgent
 
