@@ -10,7 +10,7 @@ Scoring breakdown:
 """
 
 import numpy as np
-from src.environment import LLMServeEnv, MAX_LATENCY
+from environment import LLMServeEnv, MAX_LATENCY
 
 # ---------------------------------------------------------------------------
 # Reference bounds (used for normalisation)

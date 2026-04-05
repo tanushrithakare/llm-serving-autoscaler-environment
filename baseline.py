@@ -9,7 +9,7 @@ Strategy:
   - Allocate spot GPUs proportional to queue level (cost saving)
 """
 
-from src.models import LLMServeObs, LLMServeAction
+from models import LLMServeObs, LLMServeAction
 
 
 class BaselineAgent:
