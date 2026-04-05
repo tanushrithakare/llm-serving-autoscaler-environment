@@ -79,11 +79,42 @@ DASHBOARD_HTML = """
                 <h1 class="text-3xl font-bold text-white tracking-tight">LLM Cluster Ops <span class="text-blue-500">Center</span></h1>
                 <p class="text-gray-400 mt-1">OpenEnv Real-Time Telemetry Gateway</p>
             </div>
-            <div class="flex items-center gap-3">
-                <div id="status-dot" class="w-3 h-3 rounded-full bg-green-500 pulse"></div>
-                <span id="status-text" class="text-sm font-medium uppercase tracking-widest text-green-500">System Ready</span>
+            <div class="flex items-center gap-4">
+                <button onclick="runDemo()" id="demo-btn" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-sm transition-all shadow-lg hover:scale-105">
+                    🚀 Run Baseline Demo
+                </button>
+                <div class="flex items-center gap-3">
+                    <div id="status-dot" class="w-3 h-3 rounded-full bg-green-500 pulse"></div>
+                    <span id="status-text" class="text-sm font-medium uppercase tracking-widest text-green-500">System Ready</span>
+                </div>
             </div>
         </header>
+
+        <script>
+            async function runDemo() {
+                const btn = document.getElementById('demo-btn');
+                btn.disabled = true;
+                btn.innerText = '⚡ Agent Running...';
+                btn.classList.replace('bg-blue-600', 'bg-gray-700');
+                
+                try {
+                    // Trigger a grade cycle using the baseline agent
+                    const res = await fetch('/grade', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ task: 'medium' })
+                    });
+                    const data = await res.json();
+                    alert("Demo Complete! Baseline Score: " + (data.score * 100).toFixed(1) + "%");
+                } catch (e) {
+                    console.error(e);
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = '🚀 Run Baseline Demo';
+                    btn.classList.replace('bg-gray-700', 'bg-blue-600');
+                }
+            }
+        </script>
 
         <!-- AGENT DECISION PANEL -->
         <h3 class="text-white text-sm font-bold uppercase tracking-widest mb-4 ml-1">🧠 Agent Decision <span class="text-gray-500 font-normal">(Last Action)</span></h3>
