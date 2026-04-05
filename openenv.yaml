@@ -66,13 +66,10 @@ episode_length: 1000
 
 reward:
   description: >
-    Weighted combination of latency efficiency, throughput, GPU cost, and
-    queue penalty. Clipped to [-1, 1].
+    Prioritises SLA (Latency) management. Penalises queue overflow and GPU
+    inefficiency. Normalized to [-1, 1].
   formula: >
-    0.5 * (1 - avg_latency/500)
-    + 0.3 * (throughput/max_throughput)
-    - 0.1 * (active_gpus/100)
-    - 0.1 * (queue_length/max_queue)
+    0.6 * LatencyScore + 0.2 * ThroughputScore - 0.15 * GPUCost - 0.3 * QueuePenalty
 
 grading:
   latency_weight:    0.4
