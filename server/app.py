@@ -39,6 +39,9 @@ _env     = LLMServeEnv()
 _grader  = LLMServeGrader()
 _baseline = BaselineAgent()
 
+# Track the last action for UI visibility
+_last_action = None
+
 # ---------------------------------------------------------------------------
 # UI Dashboard (HTML/JS)
 # ---------------------------------------------------------------------------
@@ -58,6 +61,9 @@ DASHBOARD_HTML = """
         .mono { font-family: 'JetBrains Mono', monospace; }
         .card { background-color: #161b22; border: 1px solid #30363d; border-radius: 12px; }
         .stat-value { font-size: 2.5rem; font-weight: 600; color: #58a6ff; }
+        .decision-card { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; }
+        .decision-label { color: #94a3b8; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+        .decision-value { font-size: 1.5rem; font-weight: 700; color: #e2e8f0; }
         .pulse { animation: pulse-animation 2s infinite; }
         @keyframes pulse-animation {
             0% { opacity: 1; }
@@ -68,18 +74,36 @@ DASHBOARD_HTML = """
 </head>
 <body class="p-8">
     <div class="max-w-6xl mx-auto">
-        <header class="flex justify-between items-center mb-8">
+        <header class="flex justify-between items-center mb-10">
             <div>
                 <h1 class="text-3xl font-bold text-white tracking-tight">LLM Cluster Ops <span class="text-blue-500">Center</span></h1>
                 <p class="text-gray-400 mt-1">OpenEnv Real-Time Telemetry Gateway</p>
             </div>
             <div class="flex items-center gap-3">
                 <div id="status-dot" class="w-3 h-3 rounded-full bg-green-500 pulse"></div>
-                <span id="status-text" class="text-sm font-medium uppercase tracking-widest text-green-500">Live Agent Connected</span>
+                <span id="status-text" class="text-sm font-medium uppercase tracking-widest text-green-500">System Ready</span>
             </div>
         </header>
 
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 text-center">
+        <!-- AGENT DECISION PANEL -->
+        <h3 class="text-white text-sm font-bold uppercase tracking-widest mb-4 ml-1">🧠 Agent Decision <span class="text-gray-500 font-normal">(Last Action)</span></h3>
+        <div class="decision-card grid grid-cols-3 gap-4 text-center mb-10 shadow-xl">
+            <div class="border-r border-gray-700">
+                <div class="decision-label">Scale Action</div>
+                <div id="dec-scale" class="decision-value">--</div>
+            </div>
+            <div class="border-r border-gray-700">
+                <div class="decision-label">Target Batch</div>
+                <div id="dec-batch" class="decision-value mono">--</div>
+            </div>
+            <div>
+                <div class="decision-label">Spot Allocation</div>
+                <div id="dec-spot" class="decision-value mono">--%</div>
+            </div>
+        </div>
+
+        <h3 class="text-white text-sm font-bold uppercase tracking-widest mb-4 ml-1">📡 Live System State</h3>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10 text-center">
             <div class="card p-6">
                 <p class="text-xs uppercase tracking-widest text-gray-400 mb-2">Active GPUs</p>
                 <p id="gpu-count" class="stat-value mono">--</p>
@@ -110,7 +134,7 @@ DASHBOARD_HTML = """
         </div>
 
         <footer class="text-center text-gray-500 text-sm mt-12 border-t border-gray-800 pt-8">
-            <p>Environment: <span class="mono">llm-serving-autoscaler-v1</span> | Runtime: <span class="mono">Docker Hub/OpenEnv</span></p>
+            <p>Environment: <span class="mono">llm-serving-autoscaler-v1</span> | <span class="mono">Tanushri205</span></p>
         </footer>
     </div>
 
@@ -120,16 +144,13 @@ DASHBOARD_HTML = """
         const gpuData = [];
         const labels = [];
 
-        const ctxL = document.getElementById('latencyChart').getContext('2d');
-        const ctxG = document.getElementById('gpuChart').getContext('2d');
-
-        const chartL = new Chart(ctxL, {
+        const chartL = new Chart(document.getElementById('latencyChart').getContext('2d'), {
             type: 'line',
             data: { labels, datasets: [{ label: 'Latency', data: latencyData, borderColor: '#58a6ff', tension: 0.4, fill: true, backgroundColor: 'rgba(88, 166, 255, 0.1)' }] },
             options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, grid: { color: '#30363d' } }, x: { display: false } }, plugins: { legend: { display: false } } }
         });
 
-        const chartG = new Chart(ctxG, {
+        const chartG = new Chart(document.getElementById('gpuChart').getContext('2d'), {
             type: 'bar',
             data: { labels, datasets: [{ label: 'GPUs', data: gpuData, backgroundColor: '#238636' }] },
             options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100, grid: { color: '#30363d' } }, x: { display: false } }, plugins: { legend: { display: false } } }
@@ -137,37 +158,36 @@ DASHBOARD_HTML = """
 
         async function updateStats() {
             try {
-                const response = await fetch('/state');
-                const data = await response.json();
+                // 1. Get State
+                const resState = await fetch('/state');
+                const data = await resState.json();
                 
                 document.getElementById('gpu-count').innerText = data.active_gpus;
                 document.getElementById('queue-len').innerText = data.queue_length;
                 document.getElementById('latency').innerText = data.avg_latency.toFixed(0);
                 document.getElementById('load').innerText = (data.cache_load * 100).toFixed(0);
 
+                // 2. Get Last Action
+                const resAction = await fetch('/last_action');
+                const act = await resAction.json();
+                if (act) {
+                    const scaleEl = document.getElementById('dec-scale');
+                    scaleEl.innerText = act.scale > 0 ? "+1" : (act.scale < 0 ? "-1" : "0");
+                    scaleEl.style.color = act.scale > 0 ? "#22c55e" : (act.scale < 0 ? "#ef4444" : "#facc15");
+                    document.getElementById('dec-batch').innerText = act.batch_size;
+                    document.getElementById('dec-spot').innerText = (act.spot_allocation * 100).toFixed(0) + "%";
+                }
+
                 const now = new Date().toLocaleTimeString();
                 labels.push(now);
                 latencyData.push(data.avg_latency);
                 gpuData.push(data.active_gpus);
-
-                if (labels.length > MAX_DATA_POINTS) {
-                    labels.shift();
-                    latencyData.shift();
-                    gpuData.shift();
-                }
-
-                chartL.update('none');
-                chartG.update('none');
-            } catch (e) {
-                console.error("Polling failed", e);
-                document.getElementById('status-dot').className = "w-3 h-3 rounded-full bg-red-500";
-                document.getElementById('status-text').innerText = "Offline / Connection Lost";
-                document.getElementById('status-text').className = "text-sm font-medium uppercase tracking-widest text-red-500";
-            }
+                if (labels.length > MAX_DATA_POINTS) { labels.shift(); latencyData.shift(); gpuData.shift(); }
+                chartL.update('none'); chartG.update('none');
+            } catch (e) { console.error(e); }
         }
 
-        setInterval(updateStats, 1000);
-        updateStats();
+        setInterval(updateStats, 1000); updateStats();
     </script>
 </body>
 </html>
@@ -177,6 +197,13 @@ DASHBOARD_HTML = """
 @app.get("/web", response_class=HTMLResponse)
 async def dashboard():
     return DASHBOARD_HTML
+
+@app.get("/last_action", response_model=LLMServeAction, summary="Read last submitted action")
+def get_last_action():
+    """Return the last action processed by the server."""
+    if _last_action is None:
+        return LLMServeAction(scale=0, batch_size=32, spot_allocation=0.0)
+    return _last_action
 
 
 # ---------------------------------------------------------------------------
@@ -221,6 +248,9 @@ def step(action: LLMServeAction):
 
     Returns the new observation, reward, done flag, and debug info.
     """
+    global _last_action
+    _last_action = action
+    
     try:
         obs, reward, done, info = _env.step(action)
     except RuntimeError as exc:
