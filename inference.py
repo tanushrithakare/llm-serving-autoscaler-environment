@@ -43,8 +43,16 @@ from models import LLMServeAction, LLMServeObs
 
 IMAGE_NAME = os.getenv("IMAGE_NAME", "llm-serving-autoscaler-environment")
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY")
-API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+API_BASE_URL = os.getenv("API_BASE_URL")
+
+# Auto-detect API base if not explicitly set
+if not API_BASE_URL:
+    if API_KEY and API_KEY.startswith("sk-"):
+        API_BASE_URL = "https://api.openai.com/v1"
+    else:
+        API_BASE_URL = "https://router.huggingface.co/v1"
+
+MODEL_NAME = os.getenv("MODEL_NAME") or ("gpt-4o-mini" if "openai" in API_BASE_URL else "Qwen/Qwen2.5-72B-Instruct")
 
 TASKS = ["easy", "medium", "hard"]
 BENCHMARK = "llm-serving-autoscaler"
@@ -281,7 +289,14 @@ async def run_task(
 
 async def main() -> None:
     llm_client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
-    env = await LLMAutoscalerEnv.from_docker_image(IMAGE_NAME)
+    
+    # Attempt to start Docker environment; fall back to local in-process mode if Docker is missing.
+    try:
+        from client import LocalLLMAutoscalerEnv
+        env = await LLMAutoscalerEnv.from_docker_image(IMAGE_NAME)
+    except (RuntimeError, FileNotFoundError, Exception) as e:
+        print(f"[DEBUG] Docker failed or missing ({e}). Falling back to Direct Mode...", flush=True)
+        env = LocalLLMAutoscalerEnv()
 
     try:
         for task in TASKS:

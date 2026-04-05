@@ -133,3 +133,34 @@ def _find_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", 0))
         return s.getsockname()[1]
+
+
+# ---------------------------------------------------------------------------
+# Direct Mode (No-Docker Fallback)
+# ---------------------------------------------------------------------------
+
+class LocalLLMAutoscalerEnv:
+    """
+    A synchronous-to-async wrapper that runs the environment directly in-process.
+    Useful when Docker is not available.
+    """
+
+    def __init__(self):
+        from environment import LLMServeEnv
+        self._env = LLMServeEnv()
+
+    async def reset(self, task: str = "easy") -> StepResult:
+        obs = self._env.reset(task=task)
+        return StepResult(observation=obs, reward=0.0, done=False, info={})
+
+    async def step(self, action: LLMServeAction) -> StepResult:
+        obs, reward, done, info = self._env.step(action)
+        return StepResult(
+            observation=obs,
+            reward=reward,
+            done=done,
+            info=info,
+        )
+
+    async def close(self) -> None:
+        pass
