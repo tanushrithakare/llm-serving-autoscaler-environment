@@ -15,4 +15,4 @@ ENV PORT=7860
 EXPOSE 7860
 
 # Run the server (reads PORT env var via our main entry point)
-CMD ["python", "server/app.py"]
+CMD ["python", "-m", "server.app"]
