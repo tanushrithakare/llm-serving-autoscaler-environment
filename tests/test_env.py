@@ -1,8 +1,8 @@
 import pytest
 import numpy as np
-from src.environment import LLMServeEnv
-from src.models import LLMServeAction, LLMServeObs
-from src.grader import LLMServeGrader
+from environment import LLMServeEnv
+from models import LLMServeAction, LLMServeObs
+from grader import LLMServeGrader
 
 def test_reset():
     """Verify reset returns a valid LLMServeObs."""

@@ -8,8 +8,8 @@ method to display a live ASCII dashboard of the simulation.
 import time
 import os
 import sys
-from src.environment import LLMServeEnv
-from src.baseline import BaselineAgent
+from environment import LLMServeEnv
+from baseline import BaselineAgent
 
 def clear_screen():
     """Clear the terminal screen based on OS."""

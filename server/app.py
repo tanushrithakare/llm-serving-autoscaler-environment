@@ -13,10 +13,10 @@ POST /grade                        — run full grader with baseline
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 
-from src.environment import LLMServeEnv
+from environment import LLMServeEnv
 from models import LLMServeAction, LLMServeObs
-from src.grader import LLMServeGrader
-from src.baseline import BaselineAgent
+from grader import LLMServeGrader
+from baseline import BaselineAgent
 
 # ---------------------------------------------------------------------------
 # App setup

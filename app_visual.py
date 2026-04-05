@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 import time
-from src.environment import LLMServeEnv
-from src.baseline import BaselineAgent
+from environment import LLMServeEnv
+from baseline import BaselineAgent
 
 # -----------------------------------------------------------------------------
 # Configuration
