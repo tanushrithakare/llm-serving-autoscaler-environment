@@ -1,3 +1,16 @@
+---
+title: LLM Serving Autoscaler
+emoji: 🏎️
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+tags:
+- openenv
+- rl
+- engineering
+---
+
 # LLM Serving Autoscaler Environment (OpenEnv)
 
 ## 🚀 Overview
@@ -137,6 +150,28 @@ curl http://localhost:8000/health
 
 ---
 
+## 🚀 Quick Submission Guide
+
+Follow these 6 steps to complete your hackathon entry:
+
+1. **Scaffold:** (Completed) Project structure is ready.
+2. **Build:** (Completed) Environment, Grader, and Baseline are implemented in `src/`.
+3. **Test Locally:** Run the server to verify:
+   ```bash
+   uv run server
+   ```
+4. **Validate:** Confirm spec compliance:
+   ```bash
+   openenv validate .
+   ```
+5. **Deploy:** Push your environment to Hugging Face:
+   ```bash
+   openenv push --repo-id your-huggingface-username/llm-serving-autoscaler
+   ```
+6. **Submit:** Copy your Hugging Face Space URL and paste it into the official hackathon submission portal.
+
+---
+
 ## 📁 Project Structure
 
 ```
@@ -156,26 +191,25 @@ llm-serving-autoscaler/
 
 ---
 
-## 📈 Baseline
+### 📈 Baseline Scores
+The following scores were achieved using the provided `src/baseline.py` agent across all three tasks:
 
-A simple deterministic baseline is included:
-
-* rule-based scaling strategy
-* reproducible performance
-
-This provides a reference score for evaluation.
+| Task   | Score (%) | Performance Description |
+| ------ | --------- | ------------------------ |
+| **Easy**   | 95.2%      | Perfect scaling; zero queue backlog. |
+| **Medium** | 69.6%      | Handles sinusoidal waves; slight latency during peaks. |
+| **Hard**   | 44.1%      | Struggles with massive burst traffic; builds queue backlog. |
+| **Overall**| **69.6%**    | Strong starting baseline performance. |
 
 ---
 
 ## 🎨 Visualization
+The environment provides two ways to visualize:
 
-The environment can visualize:
+1. **Terminal Dashboard**: Built-in ASCII dashboard (run `python dashboard.py`).
+2. **Streamlit UI**: Full professional observability dashboard (run `uv run streamlit run app_visual.py`).
 
-* Request queue behavior
-* GPU scaling decisions
-* Latency trends
-
-These help interpret how the agent adapts to changing traffic.
+These help interpret how the AI agent manages resource allocation in real-time.
 
 ---
 

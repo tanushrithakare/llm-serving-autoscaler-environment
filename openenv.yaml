@@ -1,0 +1,81 @@
+name: llm-serving-autoscaler
+version: "1.0.0"
+description: >
+  OpenEnv-compatible RL environment simulating an AI request serving system
+  where an agent manages GPU resources under dynamic traffic load.
+
+entry_point:
+  host: "0.0.0.0"
+  port: 8000
+
+endpoints:
+  reset:
+    method: POST
+    path: /reset
+    params:
+      task:
+        type: string
+        enum: [easy, medium, hard]
+        default: easy
+
+  step:
+    method: POST
+    path: /step
+    body: LLMServeAction
+
+  state:
+    method: GET
+    path: /state
+
+  health:
+    method: GET
+    path: /health
+
+  grade:
+    method: POST
+    path: /grade
+
+tasks:
+  - name: easy
+    description: Constant low traffic. Stable demand.
+    seed: 42
+
+  - name: medium
+    description: Variable sinusoidal traffic. Moderate spikes.
+    seed: 42
+
+  - name: hard
+    description: Heavy traffic spike between steps 200–500. Stress test.
+    seed: 42
+
+observation_space:
+  active_gpus:     { type: int, min: 0,   max: 100  }
+  queue_length:    { type: int, min: 0              }
+  incoming_rate:   { type: float, min: 0.0          }
+  avg_latency:     { type: float, min: 0.0          }
+  batch_size:      { type: int, min: 1              }
+  cache_load:      { type: float, min: 0.0, max: 1.0 }
+  spot_gpu_ratio:  { type: float, min: 0.0, max: 1.0 }
+
+action_space:
+  scale:           { type: int,   min: -1,  max: 1   }
+  batch_size:      { type: int,   min: 32,  max: 128  }
+  spot_allocation: { type: float, min: 0.0, max: 1.0  }
+
+episode_length: 1000
+
+reward:
+  description: >
+    Weighted combination of latency efficiency, throughput, GPU cost, and
+    queue penalty. Clipped to [-1, 1].
+  formula: >
+    0.5 * (1 - avg_latency/500)
+    + 0.3 * (throughput/max_throughput)
+    - 0.1 * (active_gpus/100)
+    - 0.1 * (queue_length/max_queue)
+
+grading:
+  latency_weight:    0.4
+  throughput_weight: 0.4
+  cost_weight:       0.2
+  score_range: [0.0, 1.0]
