@@ -84,6 +84,11 @@ DASHBOARD_HTML = """
                 <p class="text-gray-400 mt-1">OpenEnv Real-Time Telemetry Gateway</p>
             </div>
             <div class="flex items-center gap-4">
+                <select id="task-select" class="bg-gray-800 text-white text-sm rounded-lg border border-gray-700 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
+                    <option value="easy">🟢 Easy (Stable)</option>
+                    <option value="medium" selected>🟡 Medium (Sine Wave)</option>
+                    <option value="hard">🔴 Hard (Extreme Spikes)</option>
+                </select>
                 <button onclick="runLiveDemo()" id="demo-btn" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-sm transition-all shadow-lg hover:scale-105">
                     🚀 Launch Baseline Agent
                 </button>
@@ -198,16 +203,17 @@ DASHBOARD_HTML = """
             const btn = document.getElementById('demo-btn');
             const dot = document.getElementById('status-dot');
             const status = document.getElementById('status-text');
+            const task = document.getElementById('task-select').value;
 
             btn.disabled = true;
             btn.innerText = '⚡ AGENT SIMULATING...';
             btn.classList.replace('bg-blue-600', 'bg-gray-700');
             dot.classList.replace('bg-green-500', 'bg-blue-500');
-            status.innerText = 'EPISODE IN PROGRESS';
+            status.innerText = 'EPISODE IN PROGRESS (' + task.toUpperCase() + ')';
             status.style.color = '#3b82f6';
 
             try {
-                const res = await fetch('/run_live_demo', { method: 'POST' });
+                const res = await fetch('/run_live_demo?task=' + task, { method: 'POST' });
                 const result = await res.json();
                 if (result.status === 'ok') {
                     alert('Simulation Complete! Baseline score achieved: ' + (result.score * 100).toFixed(1) + '%');
@@ -245,7 +251,7 @@ def get_last_action():
     return _last_action
 
 @app.post("/run_live_demo", summary="Start a non-blocking animated simulation")
-async def run_live_demo():
+async def run_live_demo(task: str = Query("easy", pattern="^(easy|medium|hard)$")):
     """
     Runs a live episode update using the baseline agent. 
     Pauses between steps to allow the dashboard to poll for real-time data.
@@ -257,8 +263,8 @@ async def run_live_demo():
     
     _is_demo_running = True
     try:
-        # 1. Reset Global Env
-        obs = _env.reset(task="medium")
+        # 1. Reset Global Env with selected task
+        obs = _env.reset(task=task)
         steps = 0
         max_steps = 200 # Run for 200 steps for a snappy 20-second demo
         
