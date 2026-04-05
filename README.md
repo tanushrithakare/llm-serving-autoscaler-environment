@@ -1,6 +1,6 @@
 ---
 title: LLM Serving Autoscaler
-emoji: 🏎️
+emoji: cluster
 colorFrom: blue
 colorTo: green
 sdk: docker
@@ -13,7 +13,7 @@ tags:
 
 # LLM Serving Autoscaler Environment (OpenEnv)
 
-## 🚀 Overview
+## Overview
 
 This is a high-fidelity **OpenEnv-compatible** reinforcement learning environment that simulates a large-scale AI request serving cluster. 
 
@@ -21,7 +21,7 @@ In real-world LLM deployments (like OpenAI or Hugging Face), traffic is highly v
 
 ---
 
-## 🏗️ System Architecture
+## System Architecture
 
 The following diagram illustrates the interaction between the incoming traffic, the request gateway, and the Reinforcement Learning agent (the Autoscaler).
 
@@ -55,7 +55,7 @@ graph TD
 
 ---
 
-## ⚙️ Environment Specifications
+## Environment Specifications
 
 ### Observation Space (The Signals)
 The agent receives a unified state vector representing the cluster health:
@@ -66,7 +66,7 @@ The agent receives a unified state vector representing the cluster health:
 | `queue_length` | `int` | Number of requests waiting in the buffer. |
 | `incoming_rate` | `float` | Real-time arrival rate (requests per second). |
 | `avg_latency` | `float` | Current mean response time in milliseconds. |
-| `batch_size` | `int` | Number of sequences processed in a single forward pass. |
+| `batch_size` | `int` | Number of requests packed into a single GPU forward pass. |
 | `cache_load` | `float` | KV-Cache memory utilization (0.0 - 1.0). |
 | `spot_gpu_ratio`| `float` | Fraction of the cluster running on preemptible instances. |
 
@@ -81,7 +81,7 @@ The agent can modify the cluster configuration on every step:
 
 ---
 
-## 🧠 Reward Formulation
+## Reward Formulation
 The environment uses a multi-objective reward function to guide the agent toward professional engineering SLAs:
 
 $$ Reward = 0.6(Latency_{score}) + 0.2(Throughput_{score}) - 0.15(GPU_{cost}) - 0.3(Queue_{penalty}) $$
@@ -92,15 +92,15 @@ $$ Reward = 0.6(Latency_{score}) + 0.2(Throughput_{score}) - 0.15(GPU_{cost}) - 
 
 ---
 
-## 📊 Evaluation Tasks
+## Evaluation Tasks
 
 | Task | Traffic Profile | Chaos Level | Difficulty |
 | :--- | :--- | :--- | :--- |
-| **Easy** | Constant low-load. | None | 🟢 |
-| **Medium** | Sinusoidal traffic waves (Day/Night cycle). | Low (3% preemption) | 🟡 |
-| **Hard** | Sudden massive burst (Steps 200–500). | High (Symmetry stress) | 🔴 |
+| **Easy** | Constant low-load. | None | Green |
+| **Medium** | Sinusoidal traffic waves (Day/Night cycle). | Low (3% preemption) | Yellow |
+| **Hard** | Sudden massive burst (Steps 200–500). | High (Symmetry stress) | Red |
 
-### 📈 Verified Baseline Scores
+### Verified Baseline Scores
 Using the built-in deterministic `BaselineAgent`:
 
 | Task | Score (%) | Performance Status |
@@ -112,16 +112,16 @@ Using the built-in deterministic `BaselineAgent`:
 
 ---
 
-## 🎨 Observability Suite
+## Observability Suite
 
 We provide two distinct monitoring layers:
 
 1. **Terminal Ops Dashboard**: A compact ASCII-based monitoring tool (Run `python dashboard.py`).
-2. **Production Viz Dashboard**: A professional, Grafana-style Streamlit dashboard with real-time charting (Run `uv run streamlit run app_visual.py`).
+2. **Production Viz Dashboard**: A professional, Grafana-style Streamlit dashboard (Run `uv run streamlit run app_visual.py`).
 
 ---
 
-## 🚀 Quick Submission Guide
+## Quick Submission Guide
 
 1. **Test Locally:** Verify the API interface:
    ```bash
@@ -139,10 +139,7 @@ We provide two distinct monitoring layers:
 
 ---
 
-## 🔮 Future Roadmap (Optional)
+## Future Roadmap (Optional)
 * [ ] **VRAM Multi-Tenancy**: Supporting LoRA-adapter switching during inference.
 * [ ] **Predictive Scaling**: Integrating LSTM-based "Time-to-Burst" predictions.
 * [ ] **Multi-Region Cluster**: Simulating cross-region latency between GPU nodes.
-
----
-

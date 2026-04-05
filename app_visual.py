@@ -9,7 +9,7 @@ from baseline import BaselineAgent
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="LLM Cluster Visualizer",
-    page_icon="🖥️",
+    page_icon="[Cluster]",
     layout="wide",
 )
 
@@ -88,10 +88,10 @@ def step_simulation():
 # Sidebar Controls
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    st.title("🖥️ Overlord Mainframe")
+    st.title("Overlord Mainframe")
     
     task_mode = st.selectbox("1. TRAFFIC PROFILE", ["easy", "medium", "hard"], index=1)
-    if st.button("🔄 RESTART CLUSTER", use_container_width=True):
+    if st.button("RESTART CLUSTER", use_container_width=True):
         reset_simulation(task_mode)
         st.rerun()
         
@@ -99,15 +99,15 @@ with st.sidebar:
     
     st.markdown("### 2. SIMULATION PLAYBACK")
     if st.session_state.is_running:
-        if st.button("⏸ PAUSE", use_container_width=True):
+        if st.button("PAUSE", use_container_width=True):
             st.session_state.is_running = False
             st.rerun()
     else:
-        if st.button("▶️ START AUTO-PLAY", type="primary", use_container_width=True):
+        if st.button("START AUTO-PLAY", type="primary", use_container_width=True):
             st.session_state.is_running = True
             st.rerun()
             
-    if st.button("⏭ STEP FORWARD", disabled=st.session_state.is_running, use_container_width=True):
+    if st.button("STEP FORWARD", disabled=st.session_state.is_running, use_container_width=True):
         step_simulation()
         
     sim_speed = st.slider("SPEED (FPS)", min_value=1, max_value=20, value=6)
@@ -124,7 +124,7 @@ st.markdown("---")
 # ==========================================
 # SECTION 1: GLOBAL METRICS (Wide and evenly spaced)
 # ==========================================
-st.markdown("<h3 class='header-spacing'>📡 Live System State</h3>", unsafe_allow_html=True)
+st.markdown("<h3 class='header-spacing'>Live System State</h3>", unsafe_allow_html=True)
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
@@ -142,7 +142,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 # ==========================================
 # SECTION 2: THE AGENT'S DECISION (Single uncrowded card)
 # ==========================================
-st.markdown("<h3 class='header-spacing'>🧠 Agent Action Log (Step {})</h3>".format(st.session_state.step), unsafe_allow_html=True)
+st.markdown("<h3 class='header-spacing'>Agent Action Log (Step {})</h3>".format(st.session_state.step), unsafe_allow_html=True)
 
 if act:
     if act.scale > 0:
@@ -166,7 +166,7 @@ else:
 # ==========================================
 # SECTION 3: VISUALIZATIONS (Vertical Stacking to prevent cramming)
 # ==========================================
-st.markdown("<h3 class='header-spacing'>📊 Performance Telemetry</h3>", unsafe_allow_html=True)
+st.markdown("<h3 class='header-spacing'>Performance Telemetry</h3>", unsafe_allow_html=True)
 
 df = pd.DataFrame(st.session_state.history) if 'history' in st.session_state else pd.DataFrame()
 if not df.empty:
@@ -197,4 +197,4 @@ if st.session_state.is_running:
         st.rerun()
     else:
         st.session_state.is_running = False
-        st.success("SIMULATION COMPLETED.", icon="✅")
+        st.success("SIMULATION COMPLETED.")

@@ -311,15 +311,15 @@ class LLMServeEnv(OpenEnv):
         str
             Multi-line dashboard string (also printed to stdout).
         """
-        # --- queue bar (50-char max) ---
+        # --- queue bar (30-char max) ---
         q_frac   = min(self._queue_length / MAX_QUEUE, 1.0)
         q_filled = int(q_frac * 30)
-        q_bar    = "\u2588" * q_filled + "\u2591" * (30 - q_filled)
+        q_bar    = "#" * q_filled + "-" * (30 - q_filled)
 
-        # --- GPU utilisation bar ---
+        # --- GPU utilisation bar (20-char max) ---
         g_frac   = self._active_gpus / MAX_GPUS
         g_filled = int(g_frac * 20)
-        g_bar    = "\u2588" * g_filled + "\u2591" * (20 - g_filled)
+        g_bar    = "#" * g_filled + "-" * (20 - g_filled)
 
         # --- latency indicator ---
         if self._avg_latency < 50:
@@ -329,17 +329,17 @@ class LLMServeEnv(OpenEnv):
         else:
             lat_icon = "CRIT"
 
-        # --- box-drawing chars (avoid backslash in f-string for py3.11) ---
-        H  = "\u2500" * 52
-        TL, TR, ML, MR, BL, BR, V = "\u250c", "\u2510", "\u251c", "\u2524", "\u2514", "\u2518", "\u2502"
+        # --- ASCII box-drawing characters (safe for all systems) ---
+        H  = "-" * 52
+        TL, TR, ML, MR, BL, BR, V = "+", "+", "+", "+", "+", "+", "|"
 
         lines = [
             f"{TL}{H}{TR}",
             f"{V}  Step: {self._step_count:<6d} {V} Task: {self._task:<8s} {V} Reward: {reward:+.4f}  {V}",
             f"{ML}{H}{MR}",
-            f"{V}  GPUs:  {g_bar}  {self._active_gpus:>3d}/{MAX_GPUS}        {V}",
+            f"{V}  GPUs:  [{g_bar}]  {self._active_gpus:>3d}/{MAX_GPUS}        {V}",
             f"{V}  Spot:  {self._spot_gpu_ratio:.0%}                                       {V}",
-            f"{V}  Queue: {q_bar}  {self._queue_length:>6d}  {V}",
+            f"{V}  Queue: [{q_bar}]  {self._queue_length:>6d}  {V}",
             f"{V}  Rate:  {self._incoming_rate:>10.1f} req/s                    {V}",
             f"{V}  Lat:   {self._avg_latency:>8.1f} ms  {lat_icon}                      {V}",
             f"{V}  Cache: {self._cache_load:.0%}   Batch: {self._batch_size}                     {V}",
