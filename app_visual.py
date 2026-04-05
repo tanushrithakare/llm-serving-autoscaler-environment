@@ -17,9 +17,13 @@ st.set_page_config(
 st.markdown("""
 <style>
     .agent-card { background-color: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 25px; font-size: 18px; margin-bottom: 40px;}
-    .scale-up { color: #4CAF50; font-weight: bold; }
-    .scale-down { color: #F44336; font-weight: bold; }
-    .scale-hold { color: #9E9E9E; font-weight: bold; }
+    .decision-container { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; margin-bottom: 30px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
+    .decision-box { text-align: center; padding: 10px; }
+    .decision-label { color: #94a3b8; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
+    .decision-value { font-size: 1.8rem; font-weight: 700; color: #e2e8f0; }
+    .scale-up { color: #22c55e !important; }
+    .scale-down { color: #ef4444 !important; }
+    .scale-hold { color: #facc15 !important; }
     .header-spacing { margin-top: 40px; margin-bottom: 20px; }
 </style>
 """, unsafe_allow_html=True)
@@ -122,9 +126,47 @@ st.title("LLM Request Routing & Autoscaling")
 st.markdown("---")
 
 # ==========================================
-# SECTION 1: GLOBAL METRICS (Wide and evenly spaced)
+# SECTION 1: AGENT DECISION (3-box horizontal layout)
 # ==========================================
-st.markdown("<h3 class='header-spacing'>Live System State</h3>", unsafe_allow_html=True)
+st.markdown("<h3 class='header-spacing'>🧠 Agent Decision <span style='font-size: 0.8rem; font-weight: normal; color: #94a3b8;'>(Last Action Taken)</span></h3>", unsafe_allow_html=True)
+
+if act:
+    scale_class = "scale-hold"
+    scale_text = "0"
+    if act.scale > 0:
+        scale_class = "scale-up"
+        scale_text = "+1"
+    elif act.scale < 0:
+        scale_class = "scale-down"
+        scale_text = "-1"
+        
+    st.markdown(f"""
+    <div class="decision-container">
+        <div style="display: flex; justify-content: space-around; align-items: center;">
+            <div class="decision-box">
+                <div class="decision-label">Scale Action</div>
+                <div class="decision-value {scale_class}">{scale_text}</div>
+            </div>
+            <div style="border-left: 1px solid #334155; height: 40px;"></div>
+            <div class="decision-box">
+                <div class="decision-label">Batch Size</div>
+                <div class="decision-value">{act.batch_size}</div>
+            </div>
+            <div style="border-left: 1px solid #334155; height: 40px;"></div>
+            <div class="decision-box">
+                <div class="decision-label">Spot Allocation</div>
+                <div class="decision-value">{int(act.spot_allocation * 100)}%</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    st.info("System initializing... Press Auto-Play to begin monitoring agent logic.")
+
+# ==========================================
+# SECTION 2: GLOBAL METRICS (Wide and evenly spaced)
+# ==========================================
+st.markdown("<h3 class='header-spacing'>📡 Live System State</h3>", unsafe_allow_html=True)
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
@@ -137,30 +179,6 @@ with col4:
     st.metric("Cumulative Game Score", f"{st.session_state.total_reward:.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
-
-
-# ==========================================
-# SECTION 2: THE AGENT'S DECISION (Single uncrowded card)
-# ==========================================
-st.markdown("<h3 class='header-spacing'>Agent Action Log (Step {})</h3>".format(st.session_state.step), unsafe_allow_html=True)
-
-if act:
-    if act.scale > 0:
-        scale_text = "<span class='scale-up'>ADDED 1 GPU SERVER (+1)</span>"
-    elif act.scale < 0:
-        scale_text = "<span class='scale-down'>REMOVED 1 GPU SERVER (-1)</span>"
-    else:
-        scale_text = "<span class='scale-hold'>MAINTAINED HARDWARE CAPACITY (0)</span>"
-        
-    st.markdown(f"""
-    <div class='agent-card'>
-        The intelligent autoscaler decided to: {scale_text} <br><br>
-        • <b>Batch Size Tuned:</b> {act.batch_size} sequences/pass <br>
-        • <b>Spot Allocation Mix:</b> {int(act.spot_allocation * 100)}% preemptible instances requested
-    </div>
-    """, unsafe_allow_html=True)
-else:
-    st.info("System initializing... Press Auto-Play to begin sequences.")
 
 
 # ==========================================
