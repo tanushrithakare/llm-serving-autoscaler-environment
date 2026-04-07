@@ -26,3 +26,9 @@ dependencies = [
 
 [project.scripts]
 server = "server.app:main"
+
+[tool.pyrefly]
+import_root = "."
+
+[tool.pyright]
+extraPaths = ["."]

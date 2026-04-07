@@ -174,3 +174,10 @@ assets/
 inference_output.txt
 test_out.txt
 grade_out.txt
+*.txt
+uv.lock
+patch.py
+baseline.py
+show_scores.py
+test_grader.py
+!requirements.txt

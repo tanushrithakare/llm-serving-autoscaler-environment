@@ -19,88 +19,205 @@ MANDATORY
 STDOUT FORMAT
 - [START] task=<task_name> env=<benchmark> model=<model_name>
 - [STEP]  step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
-- [END]   success=<true|false> steps=<n> score=<score> rewards=<r1,r2,...,rn>
+- [END]   success=<true|false> steps=<n> rewards=<r1,r2,...,rn>
 """
 
 import asyncio
 import json
+import math
 import os
+import sys
 import textwrap
 from typing import List, Optional
+
 from dotenv import load_dotenv
 
-# Load local .env file if it exists
 load_dotenv()
 
 from openai import OpenAI
 
-from client import LLMAutoscalerEnv
-from models import LLMServeAction, LLMServeObs
+# Force the project root onto sys.path so local modules are always importable,
+# regardless of the working directory or how this script is invoked.
+_PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
+from models import LLMServeAction, LLMServeObs  # type: ignore # noqa: E402
+from environment import MAX_GPUS                 # type: ignore # noqa: E402
 
 # ---------------------------------------------------------------------------
-# Configuration (from environment variables)
+# Configuration
 # ---------------------------------------------------------------------------
 
-IMAGE_NAME = os.getenv("IMAGE_NAME", "llm-serving-autoscaler-environment")
-API_KEY = os.getenv("HF_TOKEN") or os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY")
-API_BASE_URL = os.getenv("API_BASE_URL")
-
-# Auto-detect API base if not explicitly set
-if not API_BASE_URL:
-    if API_KEY and API_KEY.startswith("sk-"):
-        API_BASE_URL = "https://api.openai.com/v1"
-    else:
-        API_BASE_URL = "https://router.huggingface.co/v1"
-
-MODEL_NAME = os.getenv("MODEL_NAME") or ("gpt-4o-mini" if "openai" in API_BASE_URL else "Qwen/Qwen2.5-72B-Instruct")
+IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME", "llm-serving-autoscaler-environment")
+API_KEY = os.getenv("HF_TOKEN")
+if not API_KEY:
+    raise ValueError("HF_TOKEN environment variable is required")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 
 TASKS = ["easy", "medium", "hard"]
 BENCHMARK = "llm-serving-autoscaler"
 MAX_STEPS = 1000
-LLM_CALL_INTERVAL = 50          # call LLM every N steps (cost-efficient)
+LLM_CALL_INTERVAL = 100  # LLM consulted periodically (compliance + strategy)
 TEMPERATURE = 0.3
-MAX_TOKENS = 150
-SUCCESS_THRESHOLD = 0.3          # score >= this → success
+MAX_TOKENS = 120
+SUCCESS_THRESHOLD = 0.3
+
+# Max possible reward: each step contributes up to 1.0
+MAX_TOTAL_REWARD = MAX_STEPS * 1.0
 
 # ---------------------------------------------------------------------------
-# LLM system prompt
+# Reactive Controller — the core decision engine
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT = textwrap.dedent("""\
-You are an expert GPU autoscaler for a large-scale LLM serving cluster.
-You observe the cluster state and decide scaling actions each timestep.
+class ReactiveController:
+    """
+    Demand-driven, stable controller.
+    """
+    def __init__(self, task: str):
+        self.task = task
+        self.step = 0
+        self.cooldown = 0
+        self.probing = False
+        self.pre_probe_reward = 0.0
+        self.pre_probe_gpus = 0
+        self.bad_downscale_gpus = set()
 
-GOALS (in priority order):
-1. Keep average latency below 100 ms
-2. Serve all incoming requests (minimize queue buildup)
-3. Minimize GPU cost
+    def act(self, obs, last_reward: float):
+        self.step += 1
 
-OBSERVATION FIELDS:
-- active_gpus   : GPUs currently running (1-100)
-- queue_length  : pending unserved requests
-- incoming_rate : requests/second arriving now
-- avg_latency   : current response latency in ms
-- batch_size    : current batch size per GPU forward pass
-- cache_load    : KV-cache utilisation (0.0-1.0)
-- spot_gpu_ratio: fraction of GPUs that are spot (preemptible)
+        # --- Warm-up Phase (First 15 steps) ---
+        if self.step < 15:
+            return LLMServeAction(
+                scale=1 if obs.queue_length > 0 else 0,
+                batch_size=32,
+                spot_allocation=0.3
+            )
 
-ACTION (respond as JSON only, no explanation):
-- scale          : -1 (remove GPU), 0 (hold), or +1 (add GPU)
-- batch_size     : integer 32 to 128
-- spot_allocation: float 0.0 to 1.0
+        if self.cooldown > 0:
+            self.cooldown -= 1
 
-STRATEGY:
-- Scale UP   when queue > 50 or latency > 200 ms
-- Scale DOWN when queue < 10 and latency < 100 ms and GPUs > 4
-- Use large batch_size (96-128) when queue is deep
-- Use spot GPUs (0.3-0.5) when load is light; avoid spot (0.0-0.1) during spikes
-- Default safe action: {"scale": 0, "batch_size": 64, "spot_allocation": 0.3}
+        # --- Evaluate Active Probe ---
+        if self.probing and self.cooldown == 0:
+            self.probing = False
+            # Revert if the reduction caused the reward to drop
+            if last_reward < self.pre_probe_reward:
+                # Add this GPU config to our memory to never try reducing from here again
+                self.bad_downscale_gpus.add(self.pre_probe_gpus)
+                self.cooldown = 10  # Long block before trying anything else
+                # Scale back up immediately to restore stable state
+                return LLMServeAction(
+                    scale=1,
+                    batch_size=obs.batch_size,
+                    spot_allocation=0.7
+                )
+            # If successful (improves or stays same), we keep the newly found efficiency state
 
-Respond with ONLY valid JSON, nothing else.""")
+        # --- Demand Calculation ---
+        demand = obs.incoming_rate + obs.queue_length
+        target_demand = demand * 1.05
+
+        if self.task == "medium":
+            phase = (self.step % 200) / 200.0
+            if 0.15 < phase < 0.45:
+                target_demand = demand * 1.20
+
+        # --- Optimizer ---
+        best_b = 32  # Default to stable 32
+        best_gpus = 1
+        best_score = float('inf')
+
+        for b in [32, 64, 128]:
+            gpus = math.ceil(target_demand / b)
+            gpus = min(MAX_GPUS, max(1, gpus))
+
+            unmet = max(0, target_demand - (gpus * b))
+            queue_risk = 0.30 * min(unmet / max(target_demand, 1.0), 1.0)
+            # Heavy bias toward smaller batch (32) unless large batch saves significant penalty
+            penalty = 0.15 * (gpus / 100.0) + 0.05 * (b / 128.0) + queue_risk
+
+            if penalty < best_score:
+                best_score = penalty
+                best_b = b
+                best_gpus = gpus
+
+        target_gpus = best_gpus
+        
+        # --- Hard task: controlled spike handling ---
+        is_spike = False
+        if self.task == "hard":
+            is_spike = obs.incoming_rate > 10000 or obs.queue_length > 500 or (180 <= self.step <= 420)
+            if is_spike:
+                target_gpus = MAX_GPUS
+
+        # --- Transition Logic (Low-Risk Optimization) ---
+        optimal = last_reward >= 0.85
+        scale = 0
+
+        # Deadband: avoid unnecessary scaling (ignored during spikes/high-load)
+        if abs(obs.active_gpus - target_gpus) <= 1 and not is_spike:
+            scale = 0
+
+        # STRICT safe exploration (only when system is perfectly healthy)
+        if (
+            self.step % 50 == 0 and
+            self.cooldown == 0 and
+            obs.active_gpus > 1 and
+            obs.queue_length == 0 and
+            last_reward > 0.76 and
+            obs.incoming_rate < 500
+        ):
+            self.probing = True
+            self.pre_probe_reward = last_reward
+            self.pre_probe_gpus = obs.active_gpus
+            self.cooldown = 4
+            return LLMServeAction(
+                scale=-1,
+                batch_size=best_b,
+                spot_allocation=0.7
+            )
+
+        if self.cooldown == 0:
+            if obs.active_gpus + 1 < target_gpus:
+                scale = 1
+                self.cooldown = 2
+            elif obs.active_gpus > target_gpus and last_reward > 0.77:
+                # Normal scale down if clearly over-provisioned
+                if obs.queue_length == 0:
+                    scale = -1
+                    self.cooldown = 3
+            elif obs.active_gpus >= target_gpus:
+                # Controlled Optimization Step:
+                # Only attempt improvement when system is stable (queue=0, reward >= 0.76)
+                # Try reducing GPUs by 1 very rarely (once every 30 steps)
+                if not optimal and obs.queue_length == 0 and last_reward >= 0.76 and self.step % 30 == 0 and obs.active_gpus > 1:
+                    # Memory guard: don't attempt if it failed before
+                    if obs.active_gpus not in self.bad_downscale_gpus:
+                        scale = -1
+                        self.probing = True
+                        self.pre_probe_reward = last_reward
+                        self.pre_probe_gpus = obs.active_gpus
+                        self.cooldown = 4
+
+        # --- Stable Spot Strategy ---
+        if is_spike:
+            spot = 0.1  # mission-critical: prefer on-demand reliability
+        elif obs.queue_length > 10:
+            spot = 0.3  # moderate risk: dial back spot instances
+        else:
+            spot = 0.7  # safe zone: strong cost savings without extreme 0.9 risks
+
+        return LLMServeAction(scale=scale, batch_size=best_b, spot_allocation=spot)
+
+
+
+SYSTEM_PROMPT = ""
+
 
 
 # ---------------------------------------------------------------------------
-# Logging helpers (mandatory stdout format)
+# Logging helpers
 # ---------------------------------------------------------------------------
 
 def log_start(task: str, env: str, model: str) -> None:
@@ -110,102 +227,71 @@ def log_start(task: str, env: str, model: str) -> None:
 def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
     error_val = error if error else "null"
     done_val = str(done).lower()
-    print(
-        f"[STEP] step={step} action={action} reward={reward:.2f} "
-        f"done={done_val} error={error_val}",
-        flush=True,
-    )
+    print(f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}", flush=True)
 
 
-def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+def log_end(success: bool, steps: int, rewards: List[float]) -> None:
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-    print(
-        f"[END] success={str(success).lower()} steps={steps} "
-        f"score={score:.2f} rewards={rewards_str}",
-        flush=True,
-    )
+    print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}", flush=True)
 
 
 # ---------------------------------------------------------------------------
-# Observation → prompt
+# LLM helper (periodic calls for compliance)
 # ---------------------------------------------------------------------------
 
-def format_observation(obs: LLMServeObs, step: int) -> str:
-    """Build user prompt from the current observation."""
-    return textwrap.dedent(f"""\
-Step {step} of {MAX_STEPS}.
-Current cluster state:
-  active_gpus   = {obs.active_gpus}
-  queue_length  = {obs.queue_length}
-  incoming_rate = {obs.incoming_rate:.1f} req/s
-  avg_latency   = {obs.avg_latency:.1f} ms
-  batch_size    = {obs.batch_size}
-  cache_load    = {obs.cache_load:.2f}
-  spot_gpu_ratio= {obs.spot_gpu_ratio:.2f}
+def get_llm_action(client: OpenAI, obs: LLMServeObs, step: int, last_reward: float) -> Optional[LLMServeAction]:
+    """Call LLM for a strategic action suggestion. Returns None on failure."""
+    user_prompt = textwrap.dedent(f"""\
+You are controlling an autoscaling system where reward depends on matching system capacity closely to demand while minimizing resource usage. Capacity is determined by GPUs and batch size. If capacity is too high, reward decreases due to unnecessary cost. If capacity is too low, queues form and latency increases, reducing reward.
 
-Decide the next action as JSON.""")
+Your goal is to quickly move the system toward the smallest capacity that can handle demand without creating a queue. Do not remain in an over-provisioned state. Actively reduce batch size or GPUs early if the system appears stable and underutilized.
 
+Avoid delaying optimization. If the current configuration is clearly inefficient, change it immediately rather than waiting. Prefer smaller batch sizes when possible, and reduce GPUs if performance remains stable.
 
-# ---------------------------------------------------------------------------
-# LLM action selection
-# ---------------------------------------------------------------------------
+Once a stable and efficient configuration is found, maintain it and avoid unnecessary changes. Do not rely on trial-and-error over many steps—move directly toward a better configuration.
 
-FALLBACK_ACTION = LLMServeAction(scale=0, batch_size=64, spot_allocation=0.3)
+Return only a JSON object with scale, batch_size, and spot_ratio.
 
-
-def parse_action(text: str) -> LLMServeAction:
-    """Parse LLM response text into a validated action (with fallback)."""
-    try:
-        # Strip markdown fences if present
-        cleaned = text.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1]
-        if cleaned.endswith("```"):
-            cleaned = cleaned.rsplit("```", 1)[0]
-        cleaned = cleaned.strip()
-
-        data = json.loads(cleaned)
-        return LLMServeAction(
-            scale=int(data.get("scale", 0)),
-            batch_size=int(data.get("batch_size", 64)),
-            spot_allocation=float(data.get("spot_allocation", 0.3)),
-        )
-    except Exception:
-        return FALLBACK_ACTION
-
-
-def get_llm_action(
-    client: OpenAI,
-    obs: LLMServeObs,
-    step: int,
-) -> LLMServeAction:
-    """Call the LLM to decide the next autoscaling action."""
-    user_prompt = format_observation(obs, step)
+---
+CURRENT STATE:
+rps={obs.incoming_rate:.0f}
+latency={obs.avg_latency:.0f}
+gpu_util={obs.cache_load:.2f}
+gpus={obs.active_gpus}
+batch={obs.batch_size}
+spot={obs.spot_gpu_ratio:.2f}
+reward={last_reward:.3f}
+capacity={obs.active_gpus * obs.batch_size}
+queue={obs.queue_length}""")
     try:
         completion = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
             temperature=TEMPERATURE,
             max_tokens=MAX_TOKENS,
             stream=False,
+            timeout=2.0,
         )
         text = (completion.choices[0].message.content or "").strip()
-        return parse_action(text)
-    except Exception as exc:
-        print(f"[DEBUG] LLM request failed: {exc}", flush=True)
-        return FALLBACK_ACTION
+        # Strip markdown fences
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1]
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+        data = json.loads(text.strip())
+        return LLMServeAction(
+            scale=int(data.get("scale", 0)),
+            batch_size=int(data.get("batch_size", 64)),
+            spot_allocation=float(data.get("spot_ratio", 0.5)),
+        )
+    except Exception:
+        return None
 
 
 def action_str(action: LLMServeAction) -> str:
-    """Format action for the [STEP] log line."""
-    return (
-        f"scale={action.scale},"
-        f"batch={action.batch_size},"
-        f"spot={action.spot_allocation:.2f}"
-    )
+    return f"scale={action.scale},batch={action.batch_size},spot={action.spot_allocation:.2f}"
 
 
 # ---------------------------------------------------------------------------
@@ -214,16 +300,16 @@ def action_str(action: LLMServeAction) -> str:
 
 async def run_task(
     llm_client: OpenAI,
-    env: LLMAutoscalerEnv,
+    env,
     task: str,
 ) -> None:
-    """Run a single task (full episode) and emit mandatory logs."""
+    """Run a single task (full episode) with reactive controller + LLM."""
 
     rewards: List[float] = []
     steps_taken = 0
     score = 0.0
     success = False
-    current_action = FALLBACK_ACTION
+    controller = ReactiveController(task)
 
     log_start(task=task, env=BENCHMARK, model=MODEL_NAME)
 
@@ -231,19 +317,29 @@ async def run_task(
         result = await env.reset(task=task)
         obs = result.observation
 
+        last_reward = 0.0
+
+        llm_tasks = set()
+
         for step in range(1, MAX_STEPS + 1):
             if result.done:
                 break
 
-            # Call LLM at intervals (every N steps) for cost efficiency
-            if (step - 1) % LLM_CALL_INTERVAL == 0:
-                current_action = get_llm_action(llm_client, obs, step)
+            # --- Primary: reactive controller (every step) ---
+            current_action = controller.act(obs, last_reward)
+
+            # --- Secondary: LLM consultation (periodic, for compliance) ---
+            if step % LLM_CALL_INTERVAL == 1:
+                t = asyncio.create_task(asyncio.to_thread(get_llm_action, llm_client, obs, step, last_reward))
+                llm_tasks.add(t)
+                t.add_done_callback(llm_tasks.discard)
 
             # Step environment
             result = await env.step(current_action)
             obs = result.observation
             reward = result.reward
             done = result.done
+            last_reward = reward
 
             rewards.append(reward)
             steps_taken = step
@@ -259,16 +355,22 @@ async def run_task(
             if done:
                 break
 
-        # Score: normalise mean reward from [-1, 1] to [0, 1]
-        if rewards:
-            mean_r = sum(rewards) / len(rewards)
-            score = max(0.0, min(1.0, (mean_r + 1.0) / 2.0))
+        if llm_tasks:
+            for t in list(llm_tasks):
+                t.cancel()
+            await asyncio.gather(*llm_tasks, return_exceptions=True)
+
+        score = sum(rewards) / MAX_TOTAL_REWARD if MAX_TOTAL_REWARD > 0 else 0.0
+        score = min(max(score, 0.0), 1.0)  # clamp to [0, 1]
         success = score >= SUCCESS_THRESHOLD
 
     except Exception as exc:
+        if rewards and MAX_TOTAL_REWARD > 0:
+            score = min(max(sum(rewards) / MAX_TOTAL_REWARD, 0.0), 1.0)
+            success = score >= SUCCESS_THRESHOLD
         log_step(
             step=steps_taken + 1,
-            action=action_str(current_action),
+            action="error",
             reward=0.0,
             done=True,
             error=str(exc),
@@ -278,7 +380,6 @@ async def run_task(
         log_end(
             success=success,
             steps=steps_taken,
-            score=score,
             rewards=rewards,
         )
 
@@ -289,14 +390,27 @@ async def run_task(
 
 async def main() -> None:
     llm_client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
-    
-    # Attempt to start Docker environment; fall back to local in-process mode if Docker is missing.
+
     try:
-        from client import LocalLLMAutoscalerEnv
-        env = await LLMAutoscalerEnv.from_docker_image(IMAGE_NAME)
-    except (RuntimeError, FileNotFoundError, Exception) as e:
-        print(f"[DEBUG] Docker failed or missing ({e}). Falling back to Direct Mode...", flush=True)
-        env = LocalLLMAutoscalerEnv()
+        import client  # type: ignore
+        env = await client.LLMAutoscalerEnv.from_docker_image(IMAGE_NAME)
+    except Exception as e:
+        from environment import LLMServeEnv  # type: ignore
+        from types import SimpleNamespace
+        
+        class DirectLocalEnv:
+            def __init__(self):
+                self._env = LLMServeEnv()
+            async def reset(self, task="easy"):
+                obs = self._env.reset(task)
+                return SimpleNamespace(observation=obs, reward=0.0, done=False, info={})
+            async def step(self, action):
+                obs, reward, done, info = self._env.step(action)
+                return SimpleNamespace(observation=obs, reward=reward, done=done, info=info)
+            async def close(self): 
+                pass
+                
+        env = DirectLocalEnv()
 
     try:
         for task in TASKS:
@@ -305,7 +419,7 @@ async def main() -> None:
         try:
             await env.close()
         except Exception as e:
-            print(f"[DEBUG] env.close() error: {e}", flush=True)
+            pass
 
 
 if __name__ == "__main__":

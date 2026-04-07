@@ -9,6 +9,13 @@ Implements LLMServeEnv with:
 
 import math
 import numpy as np
+import os
+import sys
+# Ensure the root directory is on the path for local imports
+_root = os.path.dirname(os.path.abspath(__file__))
+if _root not in sys.path:
+    sys.path.append(_root)
+
 from models import LLMServeObs, LLMServeAction
 
 # ---------------------------------------------------------------------------
@@ -52,12 +59,12 @@ def _traffic_hard(step: int, rng: np.random.Generator) -> float:
     if step < 200:
         base = 150.0                                      # same as easy
     elif step < 500:
-        base = 15000.0 + rng.normal(0, 300.0)            # exceeds max capacity
+        base = 20000.0 + rng.normal(0, 300.0)            # 20K rps - exceeds max capacity
     else:
         # cooldown stays well above easy-level for 500 steps
         progress = (step - 500) / 500
         base = 6000.0 - 5800.0 * progress                # 6000 → 200
-    return float(np.clip(base + rng.normal(0, 15.0), 80, 16000))
+    return float(np.clip(base + rng.normal(0, 15.0), 80, 21000))
 
 
 _TRAFFIC_FN = {

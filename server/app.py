@@ -17,8 +17,10 @@ import asyncio
 import os
 import sys
 
-# Ensure the root directory is on the path for Docker runtime
-sys.path.append(os.getcwd())
+# Ensure the root directory (where environment and models are) is on the path
+_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _root not in sys.path:
+    sys.path.append(_root)
 
 from environment import LLMServeEnv
 from models import LLMServeAction, LLMServeObs
@@ -46,6 +48,10 @@ _last_reward = 0.0
 
 # A flag to prevent concurrent demo runs
 _is_demo_running = False
+
+# History for visualization
+_history = []
+_MAX_HISTORY = 1000
 
 # ---------------------------------------------------------------------------
 # UI Dashboard (HTML/JS)
@@ -279,6 +285,77 @@ DASHBOARD_HTML = """
 async def dashboard():
     return DASHBOARD_HTML
 
+
+VIZ_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LLM Cluster Telemetry | /viz</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;600&display=swap" rel="stylesheet">
+    <style>
+        body { background-color: #0b0e14; color: #e2e8f0; font-family: 'Outfit', sans-serif; }
+        .chart-card { background-color: #151921; border: 1px solid #1f2937; border-radius: 16px; padding: 15px; }
+    </style>
+</head>
+<body class="p-6">
+    <div class="max-w-7xl mx-auto">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold text-white tracking-widest uppercase">Live <span class="text-blue-500">Telemetry</span> Dashboard</h1>
+            <div class="text-sm text-gray-500">Update frequency: 1Hz</div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div class="chart-card shadow-lg"><div id="latency-chart" style="height:350px;"></div></div>
+            <div class="chart-card shadow-lg"><div id="gpu-chart" style="height:350px;"></div></div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="chart-card shadow-lg"><div id="queue-chart" style="height:350px;"></div></div>
+            <div class="chart-card shadow-lg"><div id="reward-chart" style="height:350px;"></div></div>
+        </div>
+    </div>
+
+    <script>
+        const layout_base = { 
+            paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { color: '#94a3b8', family: 'Outfit' },
+            margin: { t: 40, b: 40, l: 50, r: 20 },
+            xaxis: { gridcolor: '#1f2937', zeroline: false },
+            yaxis: { gridcolor: '#1f2937', zeroline: false }
+        };
+
+        async function updateGraphs() {
+            const res = await fetch('/history');
+            const history = await res.json();
+            
+            const x = history.map(h => h.step);
+            const latency = history.map(h => h.latency);
+            const gpus = history.map(h => h.gpus);
+            const queue = history.map(h => h.queue);
+            const reward = history.map(h => h.reward);
+
+            Plotly.react('latency-chart', [{ x, y: latency, type: 'scatter', mode: 'lines', fill: 'tozeroy', line: { color: '#3b82f6', width: 3 }, name: 'Latency (ms)' }], { ...layout_base, title: 'Live Latency Evolution' });
+            Plotly.react('gpu-chart', [{ x, y: gpus, type: 'bar', marker: { color: '#10b981' }, name: 'Active GPUs' }], { ...layout_base, title: 'GPU Cluster Capacity' });
+            Plotly.react('queue-chart', [{ x, y: queue, type: 'scatter', mode: 'lines', line: { color: '#8b5cf6', dash: 'dot' }, name: 'Queue Depth' }], { ...layout_base, title: 'Pending Request Backlog' });
+            Plotly.react('reward-chart', [{ x, y: reward, type: 'scatter', mode: 'lines+markers', line: { color: '#f43f5e' }, name: 'Step Reward' }], { ...layout_base, title: 'Agent Performance Signal' });
+        }
+
+        setInterval(updateGraphs, 2000);
+        updateGraphs();
+    </script>
+</body>
+</html>
+"""
+
+@app.get("/viz", response_class=HTMLResponse)
+async def viz_dashboard():
+    return VIZ_HTML
+
+@app.get("/history")
+async def get_history():
+    return _history
+
 @app.get("/last_action", response_model=LLMServeAction, summary="Read last submitted action")
 def get_last_action():
     """Return the last action processed by the server."""
@@ -314,6 +391,18 @@ async def run_live_demo(task: str = Query("easy", pattern="^(easy|medium|hard)$"
             # 3. Step Global Env
             obs, reward, done, info = _env.step(action)
             _last_reward = reward
+            
+            # Record history
+            _history.append({
+                "step": steps,
+                "latency": obs.avg_latency,
+                "gpus": obs.active_gpus,
+                "queue": obs.queue_length,
+                "reward": reward
+            })
+            if len(_history) > _MAX_HISTORY:
+                _history.pop(0)
+
             steps += 1
             
             # 4. Critical: Yield control to the event loop so /state can be served
@@ -363,9 +452,10 @@ def reset(task: str = Query("easy", pattern="^(easy|medium|hard)$")):
 
     - **task**: difficulty level — `easy`, `medium`, or `hard`
     """
-    global _last_reward, _last_action
+    global _last_reward, _last_action, _history
     _last_reward = 0.0
     _last_action = None
+    _history = []
     obs = _env.reset(task=task)
     return obs
 
@@ -377,11 +467,24 @@ def step(action: LLMServeAction):
 
     Returns the new observation, reward, done flag, and debug info.
     """
-    global _last_action, _last_reward
+    global _last_action, _last_reward, _history
     _last_action = action
     
     try:
         obs, reward, done, info = _env.step(action)
+        _last_reward = reward
+        
+        # Record history
+        _history.append({
+            "step": len(_history), # approximated incremental step
+            "latency": obs.avg_latency,
+            "gpus": obs.active_gpus,
+            "queue": obs.queue_length,
+            "reward": reward
+        })
+        if len(_history) > _MAX_HISTORY:
+            _history.pop(0)
+            
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

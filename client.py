@@ -16,7 +16,14 @@ from typing import Optional
 
 import httpx
 
-from models import LLMServeObs, LLMServeAction
+import os
+import sys
+# Force the project root onto sys.path — works regardless of cwd or invocation method.
+_PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
+from models import LLMServeObs, LLMServeAction  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +64,7 @@ class LLMAutoscalerEnv:
         port = _find_free_port()
 
         result = subprocess.run(
-            ["docker", "run", "-d", "-p", f"{port}:8000", image_name],
+            ["docker", "run", "-d", "-p", f"{port}:7860", image_name],
             capture_output=True,
             text=True,
         )
@@ -118,7 +125,7 @@ class LLMAutoscalerEnv:
                 resp = await self._client.get("/health")
                 if resp.status_code == 200:
                     return
-            except (httpx.ConnectError, httpx.ReadError):
+            except Exception:
                 pass
             await asyncio.sleep(0.5)
         raise TimeoutError(f"Container not healthy after {timeout}s")
