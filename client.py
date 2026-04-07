@@ -14,7 +14,7 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Optional
 
-import httpx
+import httpx  # type: ignore
 
 import os
 import sys
@@ -23,7 +23,7 @@ _PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from models import LLMServeObs, LLMServeAction  # noqa: E402
+from models import LLMServeObs, LLMServeAction  # type: ignore # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +153,7 @@ class LocalLLMAutoscalerEnv:
     """
 
     def __init__(self):
-        from environment import LLMServeEnv
+        from environment import LLMServeEnv  # type: ignore # noqa: E402
         self._env = LLMServeEnv()
 
     async def reset(self, task: str = "easy") -> StepResult:

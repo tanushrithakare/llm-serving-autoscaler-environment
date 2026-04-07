@@ -8,15 +8,15 @@ Implements LLMServeEnv with:
 """
 
 import math
-import numpy as np
+import numpy as np  # type: ignore
 import os
 import sys
 # Ensure the root directory is on the path for local imports
 _root = os.path.dirname(os.path.abspath(__file__))
 if _root not in sys.path:
-    sys.path.append(_root)
+    sys.path.insert(0, _root)
 
-from models import LLMServeObs, LLMServeAction
+from models import LLMServeObs, LLMServeAction  # type: ignore # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -105,7 +105,7 @@ class LLMServeEnv(OpenEnv):
     """
 
     def __init__(self):
-        self._rng: np.random.Generator = None
+        self._rng: np.random.Generator = None  # type: ignore
         self._task: str = "easy"
         self._step_count: int = 0
 

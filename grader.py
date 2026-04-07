@@ -9,14 +9,14 @@ Scoring breakdown:
   - 30 % cost efficiency      (lower GPU cost → higher score)
 """
 
-import numpy as np
+import numpy as np  # type: ignore
 import os
 import sys
 _PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from environment import LLMServeEnv, MAX_LATENCY  # noqa: E402
+from environment import LLMServeEnv, MAX_LATENCY  # type: ignore # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Reference bounds (used for normalisation)

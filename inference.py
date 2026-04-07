@@ -30,11 +30,11 @@ import sys
 import textwrap
 from typing import List, Optional
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # type: ignore
 
 load_dotenv()
 
-from openai import OpenAI
+from openai import OpenAI  # type: ignore
 
 # Force the project root onto sys.path so local modules are always importable,
 # regardless of the working directory or how this script is invoked.

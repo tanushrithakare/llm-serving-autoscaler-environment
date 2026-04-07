@@ -10,9 +10,9 @@ GET  /health                       — liveness check
 POST /grade                        — run full grader with baseline
 """
 
-from fastapi import FastAPI, HTTPException, Query, Response
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Query, Response  # type: ignore
+from fastapi.responses import HTMLResponse  # type: ignore
+from pydantic import BaseModel  # type: ignore
 import asyncio
 import os
 import sys

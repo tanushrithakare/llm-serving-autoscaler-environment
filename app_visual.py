@@ -1,8 +1,16 @@
-import streamlit as st
-import pandas as pd
+import streamlit as st  # type: ignore
+import pandas as pd  # type: ignore
 import time
-from environment import LLMServeEnv
-from baseline import BaselineAgent
+import os
+import sys
+
+# Ensure the root directory is on the path
+_PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
+from environment import LLMServeEnv  # type: ignore # noqa: E402
+from baseline import PPOAgent  # type: ignore # noqa: E402
 
 # -----------------------------------------------------------------------------
 # Configuration
@@ -33,7 +41,7 @@ st.markdown("""
 # -----------------------------------------------------------------------------
 if 'initialized' not in st.session_state:
     st.session_state.env = LLMServeEnv()
-    st.session_state.agent = BaselineAgent()
+    st.session_state.agent = PPOAgent()
     st.session_state.obs = st.session_state.env.reset(task="medium")
     
     st.session_state.is_running = False

@@ -8,8 +8,14 @@ method to display a live ASCII dashboard of the simulation.
 import time
 import os
 import sys
-from environment import LLMServeEnv
-from baseline import BaselineAgent
+
+# Ensure the root directory is on the path
+_PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
+from environment import LLMServeEnv  # type: ignore # noqa: E402
+from baseline import PPOAgent  # type: ignore # noqa: E402
 
 def clear_screen():
     """Clear the terminal screen based on OS."""
@@ -23,7 +29,7 @@ def main():
         return
 
     env = LLMServeEnv()
-    agent = BaselineAgent()
+    agent = PPOAgent()
     
     obs = env.reset(task=task)
     done = False
