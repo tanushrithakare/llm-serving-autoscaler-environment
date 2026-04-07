@@ -17,11 +17,6 @@ import asyncio
 import os
 import sys
 
-# Ensure the root directory (where environment and models are) is on the path
-_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _root not in sys.path:
-    sys.path.insert(0, _root)
-
 from environment import LLMServeEnv  # type: ignore # noqa: E402
 from models import LLMServeAction, LLMServeObs  # type: ignore # noqa: E402
 from grader import LLMServeGrader  # type: ignore # noqa: E402
@@ -532,10 +527,9 @@ def grade(request: GradeRequest):
 
 
 def main():
-    """Entry point for the server (used by [project.scripts])."""
     import uvicorn
     import os
-    port = int(os.getenv("PORT", 8000))
+    port = int(os.getenv("PORT", 7860))
     uvicorn.run("server.app:app", host="0.0.0.0", port=port)
 
 
