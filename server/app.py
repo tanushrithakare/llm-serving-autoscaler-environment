@@ -20,12 +20,12 @@ import sys
 # Ensure the root directory (where environment and models are) is on the path
 _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _root not in sys.path:
-    sys.path.append(_root)
+    sys.path.insert(0, _root)
 
-from environment import LLMServeEnv
-from models import LLMServeAction, LLMServeObs
-from grader import LLMServeGrader
-from baseline import BaselineAgent
+from environment import LLMServeEnv  # type: ignore # noqa: E402
+from models import LLMServeAction, LLMServeObs  # type: ignore # noqa: E402
+from grader import LLMServeGrader  # type: ignore # noqa: E402
+from baseline import PPOAgent  # type: ignore # noqa: E402
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -40,7 +40,7 @@ app = FastAPI(
 # Singleton environment (one session per server process)
 _env     = LLMServeEnv()
 _grader  = LLMServeGrader()
-_baseline = BaselineAgent()
+_baseline = PPOAgent()
 
 # Track the last action and reward for UI visibility
 _last_action = None
