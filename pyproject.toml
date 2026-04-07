@@ -32,3 +32,7 @@ import_root = "."
 
 [tool.pyright]
 extraPaths = ["."]
+
+[tool.setuptools]
+packages = ["server"]
+py-modules = ["environment", "models", "grader", "inference", "baseline", "client", "dashboard", "app_visual", "patch", "show_scores", "test_grader"]

@@ -22,6 +22,28 @@ Serving LLMs at scale is expensive. Traffic behaves unpredictably (e.g., sine wa
 
 The environment evaluates agents across three difficulty levels:
 
+### 🏛️ System Architecture
+
+```mermaid
+graph TD
+    A[RL Agent / Controller] -- Action:\nscale, batch_size, spot_ratio --> B[FastAPI OpenEnv Server]
+    B -- Observation:\ngpus, latency, queue, cache --> A
+    B -- Reward Signal --> A
+    
+    subgraph Env [LLM Serving Cluster Simulation]
+        B --> C[Request Router]
+        C -- Traffic Rate --> D[Request Queue]
+        D -- Batches --> E[Worker GPUs]
+        E -- Metrics --> F[Grader Engine]
+        F --> B
+    end
+    
+    classDef main fill:#303030,stroke:#666,stroke-width:2px,color:#fff;
+    classDef sub fill:#1E1E1E,stroke:#444,stroke-width:2px,color:#ddd;
+    class A,B main;
+    class C,D,E,F sub;
+```
+
 ### 🚦 Task Descriptions
 | Task Name | Expected Difficulty | Description |
 |-----------|--------------------|-------------|
