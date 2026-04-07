@@ -269,7 +269,7 @@ DASHBOARD_HTML = """
             }
         }
 
-        setInterval(updateStats, 1000); updateStats();
+        setInterval(updateStats, 2000); updateStats();
     </script>
 </body>
 </html>
@@ -352,12 +352,16 @@ async def get_history():
     return _history
 
 @app.get("/last_action", response_model=LLMServeAction, summary="Read last submitted action")
-def get_last_action():
+async def get_last_action():
     """Return the last action processed by the server."""
-    if _last_action is None:
-        # Default starting state for the dashboard before first action
-        return LLMServeAction(scale=0, batch_size=64, spot_allocation=0.0)
-    return _last_action
+    try:
+        if _last_action is None:
+            # Default starting state for the dashboard before first action
+            return LLMServeAction(scale=0, batch_size=64, spot_allocation=0.0)
+        return _last_action
+    except Exception as exc:
+        print(f"Error in /last_action: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 @app.post("/run_live_demo", summary="Start a non-blocking animated simulation")
 async def run_live_demo(task: str = Query("easy", pattern="^(easy|medium|hard)$")):
@@ -379,31 +383,35 @@ async def run_live_demo(task: str = Query("easy", pattern="^(easy|medium|hard)$"
         max_steps = 500 # Run for 500 steps for a substantial 50-second demo
         
         while steps < max_steps:
-            # 2. Get baseline action
-            action = _baseline(obs)
-            _last_action = action
-            
-            # 3. Step Global Env
-            obs, reward, done, info = _env.step(action)
-            _last_reward = reward
-            
-            # Record history
-            _history.append({
-                "step": steps,
-                "latency": obs.avg_latency,
-                "gpus": obs.active_gpus,
-                "queue": obs.queue_length,
-                "reward": reward
-            })
-            if len(_history) > _MAX_HISTORY:
-                _history.pop(0)
-
-            steps += 1
-            
-            # 4. Critical: Yield control to the event loop so /state can be served
-            await asyncio.sleep(0.1) # 10 steps per second pace
-            
-            if done:
+            try:
+                # 2. Get baseline action
+                action = _baseline(obs)
+                _last_action = action
+                
+                # 3. Step Global Env
+                obs, reward, done, info = _env.step(action)
+                _last_reward = reward
+                
+                # Record history
+                _history.append({
+                    "step": steps,
+                    "latency": obs.avg_latency,
+                    "gpus": obs.active_gpus,
+                    "queue": obs.queue_length,
+                    "reward": reward
+                })
+                if len(_history) > _MAX_HISTORY:
+                    _history.pop(0)
+    
+                steps += 1
+                
+                # 4. Critical: Yield control to the event loop so /state can be served
+                await asyncio.sleep(0.1) # 10 steps per second pace
+                
+                if done:
+                    break
+            except Exception as e:
+                print(f"Error within demo loop: {e}")
                 break
         
         stats = _env.episode_stats()
@@ -441,31 +449,34 @@ class GradeResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 @app.post("/reset", response_model=LLMServeObs, summary="Reset the environment")
-def reset(task: str = Query("easy", pattern="^(easy|medium|hard)$")):
+async def reset(task: str = Query("easy", pattern="^(easy|medium|hard)$")):
     """
     Start a fresh episode.
 
     - **task**: difficulty level — `easy`, `medium`, or `hard`
     """
     global _last_reward, _last_action, _history
-    _last_reward = 0.0
-    _last_action = None
-    _history = []
-    obs = _env.reset(task=task)
-    return obs
+    try:
+        _last_reward = 0.0
+        _last_action = None
+        _history = []
+        obs = _env.reset(task=task)
+        return obs
+    except Exception as exc:
+        print(f"Error in /reset: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.post("/step", response_model=StepResponse, summary="Submit an action")
-def step(action: LLMServeAction):
+async def step(action: LLMServeAction):
     """
     Advance one timestep with the given action.
 
     Returns the new observation, reward, done flag, and debug info.
     """
     global _last_action, _last_reward, _history
-    _last_action = action
-    
     try:
+        _last_action = action
         obs, reward, done, info = _env.step(action)
         _last_reward = reward
         
@@ -480,36 +491,46 @@ def step(action: LLMServeAction):
         if len(_history) > _MAX_HISTORY:
             _history.pop(0)
             
-    except RuntimeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-    return StepResponse(
-        observation = obs,
-        reward      = reward,
-        done        = done,
-        info        = info,
-    )
+        return StepResponse(
+            observation = obs,
+            reward      = reward,
+            done        = done,
+            info        = info,
+        )
+    except Exception as exc:
+        print(f"Error in /step: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/state", response_model=LLMServeObs, summary="Read current observation")
-def state():
+async def state():
     """Return the current environment observation without advancing the episode."""
     try:
         return _env.state()
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        print(f"Error in /state: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/health", summary="Liveness check")
-def health():
+async def health():
     """Simple health probe."""
     return {"status": "ok", "version": "1.0.1"}
 
+@app.get("/healthz", summary="HF Health check")
+async def healthz():
+    """Always returns ok: true for HF."""
+    return {"ok": True}
+
 
 @app.get("/live_reward", summary="Read last reward signal")
-def get_live_reward():
+async def get_live_reward():
     """Return the last reward processed by the server."""
-    return {"reward": _last_reward}
+    try:
+        return {"reward": _last_reward}
+    except Exception as exc:
+        print(f"Error in /live_reward: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.post("/grade", response_model=GradeResponse, summary="Grade the baseline agent")
@@ -519,11 +540,15 @@ def grade(request: GradeRequest):
 
     Useful for verifying environment correctness and getting a reference score.
     """
-    if request.task not in ("easy", "medium", "hard"):
-        raise HTTPException(status_code=400, detail="task must be easy, medium, or hard")
-
-    score = _grader.grade(_baseline, task=request.task)
-    return GradeResponse(task=request.task, score=score)
+    try:
+        if request.task not in ("easy", "medium", "hard"):
+            raise HTTPException(status_code=400, detail="task must be easy, medium, or hard")
+    
+        score = _grader.grade(_baseline, task=request.task)
+        return GradeResponse(task=request.task, score=score)
+    except Exception as exc:
+        print(f"Error in /grade: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 def main():
