@@ -104,8 +104,8 @@ class LLMServeGrader:
         )
         
 
-        # Strictly between 0 and 1 as required by Phase 2 deep validation
-        return float(np.clip(score, 0.0, 1.0))
+        # Strictly between 0 and 1 (exclusive) as required by Phase 2 validation
+        return float(np.clip(score, 0.01, 0.99))
 
     def grade_all_tasks(self, agent_fn) -> dict:
         """
