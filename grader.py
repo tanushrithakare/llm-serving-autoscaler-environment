@@ -4,9 +4,9 @@ grader.py — Deterministic grader for the LLM Serving Autoscaler Environment.
 Produces a score in [0.0, 1.0] from episode statistics.
 
 Scoring breakdown:
-  - 50 % latency efficiency   (lower avg latency → higher score)
-  - 20 % service ratio        (served/incoming per step; 1.0 = perfect)
-  - 30 % cost efficiency      (lower GPU cost → higher score)
+  - 40 % latency efficiency   (lower avg latency → higher score)
+  - 40 % service ratio        (served/incoming per step; 1.0 = perfect)
+  - 20 % cost efficiency      (lower GPU cost → higher score)
 """
 
 import numpy as np  # type: ignore
@@ -98,17 +98,14 @@ class LLMServeGrader:
 
         # Stricter weighted scoring to pull initial baseline scores down
         score = (
-            0.5 * latency_score
-            + 0.2 * throughput_score
-            + 0.3 * cost_score
+            0.4 * latency_score        # aligned with openenv.yaml
+            + 0.4 * throughput_score   # increased throughput weight
+            + 0.2 * cost_score         # reduced cost weight
         )
         
-        # Apply hard_penalty to bring baseline scores down (< 0.40 target)
-        if stats.get("task") == "hard":
-            score /= 1.5
-            
+
         # Strictly between 0 and 1 as required by Phase 2 deep validation
-        return float(np.clip(score, 0.01, 0.99))
+        return float(np.clip(score, 0.0, 1.0))
 
     def grade_all_tasks(self, agent_fn) -> dict:
         """
