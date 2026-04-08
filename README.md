@@ -9,6 +9,8 @@ tags:
   - openenv
 ---
 
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+
 # 🚀 LLM Serving Autoscaler Environment
 
 > An OpenEnv-compatible reinforcement learning environment for training and evaluating agents that dynamically manage GPU autoscaling in an LLM serving cluster — under real-world-style volatile traffic conditions.
@@ -134,7 +136,9 @@ Episodes are graded using three components over the full 1000-step episode:
 final_score = 0.4 × latency_score + 0.4 × throughput_score + 0.2 × cost_score
 ```
 
-Scores are bounded to `(0.01, 0.99)`. A score of `1.0` or `0.0` indicates a system error.
+- Deterministic environment (fixed seed = 42) ensures zero-variance evaluation.
+
+Scores are strictly bounded within `(0.01, 0.99)` to comply with OpenEnv validation rules. A score of `1.0` or `0.0` indicates a system error.
 
 ### Step-level Reward Signal (for RL agents)
 
@@ -222,6 +226,8 @@ HF_TOKEN="hf_your_token_here"
 LOCAL_IMAGE_NAME="llm-serving-autoscaler-environment"
 ```
 
+⚠️ This project uses the OpenAI client via a proxy (API_BASE_URL). Do not hardcode API keys. This is required for OpenEnv evaluation compliance.
+
 ### 3. Run the inference script
 
 ```bash
@@ -252,11 +258,11 @@ print(scores)
 # Build the server image
 docker build -t llm-serving-autoscaler-environment .
 
-# Run the OpenEnv server on port 8000
-docker run -p 8000:8000 llm-serving-autoscaler-environment
+# Run the OpenEnv server on port 7860
+docker run -p 7860:7860 llm-serving-autoscaler-environment
 ```
 
-The server exposes the full OpenEnv API at `http://localhost:8000`:
+The server exposes the full OpenEnv API at `http://localhost:7860`:
 - `GET  /health`  — liveness check
 - `POST /reset`   — start new episode `{"task": "easy"|"medium"|"hard"}`
 - `POST /step`    — advance one timestep `{"scale": 0, "batch_size": 64, "spot_allocation": 0.3}`
