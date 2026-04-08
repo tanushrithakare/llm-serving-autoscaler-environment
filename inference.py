@@ -231,9 +231,9 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
     print(f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}", flush=True)
 
 
-def log_end(success: bool, steps: int, rewards: List[float]) -> None:
+def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-    print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}", flush=True)
+    print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -371,7 +371,7 @@ async def run_task(
 
     except Exception as exc:
         if rewards and MAX_TOTAL_REWARD > 0:
-            score = min(max(sum(rewards) / MAX_TOTAL_REWARD, 0.0), 1.0)
+            score = float(np.clip(sum(rewards) / MAX_TOTAL_REWARD, 0.01, 0.99))
             success = score >= SUCCESS_THRESHOLD
         log_step(
             step=steps_taken + 1,
@@ -385,6 +385,7 @@ async def run_task(
         log_end(
             success=success,
             steps=steps_taken,
+            score=score,
             rewards=rewards,
         )
 
