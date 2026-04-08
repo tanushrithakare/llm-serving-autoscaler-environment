@@ -1,6 +1,9 @@
 """
-baseline.py — High-performance PPO-derived agent for the LLM Serving Autoscaler.
-Beats the standard rule-based baseline (0.39 → 0.52) on the Hard task.
+baseline.py — Baseline heuristic agent for the LLM Serving Autoscaler.
+
+Provides a strong hand-tuned rule-based baseline that outperforms naive
+static policies by adapting batch size and spot allocation based on observed
+queue depth, latency, and incoming traffic rate.
 """
 
 import os
@@ -12,14 +15,18 @@ if _PROJECT_ROOT not in sys.path:
 from models import LLMServeObs, LLMServeAction  # type: ignore # noqa: E402
 
 
-class PPOAgent:
+class BaselineHeuristicAgent:
     """
-    Optimized policy using a PPO-derived heuristic for extreme spikes.
-    
-    Improvements:
-    - Aggressive Scaling: Jump to max GPUs when massive spikes detected.
-    - Proactive Batching: Pre-scale batch size based on incoming rate trends.
-    - Cost-Aware Spot Allocation: Dynamic spot allocation based on queue risk.
+    A strong hand-tuned heuristic agent for the LLM Serving Autoscaler.
+
+    Strategy:
+    - Aggressive Scaling  : Immediately jump to max GPUs during massive traffic spikes.
+    - Adaptive Batching   : Use larger batch sizes during overload to maximise throughput.
+    - Cost-Aware Spot Mix : High spot allocation during quiet periods; near-zero during spikes.
+
+    This agent serves as the included reference baseline. Custom agents that
+    learn from environment feedback (e.g., PPO, SAC, or LLM-driven planners)
+    are expected to improve upon it, especially on the hard task.
     """
 
     def __init__(self):
@@ -46,11 +53,11 @@ class PPOAgent:
         # 3. Optimized Batch Size
         # PPO discovered that batch 128 is essential during spikes, but 64 is safer for latency
         if is_massive_spike:
-            batch_size = 128
+            batch_size = 128  # Max throughput under impossible load
         elif obs.queue_length > 20:
-            batch_size = 96
+            batch_size = 128  # High load: maximise throughput
         else:
-            batch_size = 64
+            batch_size = 64   # Moderate load: balance latency and throughput
 
         # 4. Dynamic Spot Strategy
         # Higher spot allocation during stable periods, lower during spikes to ensure throughput reliability
@@ -67,5 +74,6 @@ class PPOAgent:
             spot_allocation = spot_allocation,
         )
 
-# Maintain compatibility for scripts importing "BaselineAgent"
-BaselineAgent = PPOAgent
+# Backwards-compatible aliases
+BaselineAgent = BaselineHeuristicAgent
+PPOAgent = BaselineHeuristicAgent  # legacy alias

@@ -1,5 +1,5 @@
 """
-app.py — FastAPI server (Live Ops Center v1.1 - Final Recovery)
+app.py — FastAPI server for the LLM Serving Autoscaler Environment.
 
 Endpoints
 ---------
@@ -7,7 +7,7 @@ POST /reset?task=easy|medium|hard  — start a new episode
 POST /step                         — submit an action, get obs + reward
 GET  /state                        — read current observation
 GET  /health                       — liveness check
-POST /grade                        — run full grader with baseline
+POST /grade                        — run full graded episode with baseline agent
 """
 
 from fastapi import FastAPI, HTTPException, Query, Response  # type: ignore
@@ -16,11 +16,12 @@ from pydantic import BaseModel  # type: ignore
 import asyncio
 import os
 import sys
+from typing import Optional
 
 from environment import LLMServeEnv  # type: ignore # noqa: E402
 from models import LLMServeAction, LLMServeObs  # type: ignore # noqa: E402
 from grader import LLMServeGrader  # type: ignore # noqa: E402
-from baseline import PPOAgent  # type: ignore # noqa: E402
+from baseline import BaselineHeuristicAgent  # type: ignore # noqa: E402
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -32,21 +33,53 @@ app = FastAPI(
     version     = "1.0.1",
 )
 
-# Singleton environment (one session per server process)
-_env     = LLMServeEnv()
-_grader  = LLMServeGrader()
-_baseline = PPOAgent()
 
-# Track the last action and reward for UI visibility
-_last_action = None
-_last_reward = 0.0
+# ---------------------------------------------------------------------------
+# Centralised application state — avoids mutable module-level globals
+# ---------------------------------------------------------------------------
 
-# A flag to prevent concurrent demo runs
-_is_demo_running = False
+class AppState:
+    """
+    Holds all mutable server-side state in one place with thread-safety.
+    A single instance (_state) is created at startup and shared across
+    request handlers via closure — no global keyword required.
+    """
 
-# History for visualization
-_history = []
-_MAX_HISTORY = 1000
+    def __init__(self) -> None:
+        self.env             = LLMServeEnv()
+        self.baseline        = BaselineHeuristicAgent()
+        self.last_action: Optional[LLMServeAction] = None
+        self.last_reward: float = 0.0
+        self.history: list   = []
+        self.is_demo_running: bool = False
+        self.lock            = asyncio.Lock()
+
+    MAX_HISTORY: int = 1000
+
+    def record(self, step: int, obs: LLMServeObs, reward: float) -> None:
+        """Append a telemetry snapshot and keep the ring-buffer bounded."""
+        self.history.append({
+            "step":    step,
+            "latency": obs.avg_latency,
+            "gpus":    obs.active_gpus,
+            "queue":   obs.queue_length,
+            "reward":  reward,
+        })
+        if len(self.history) > self.MAX_HISTORY:
+            self.history.pop(0)
+
+    def reset_episode(self, task: str) -> LLMServeObs:
+        """Clear transient per-episode state and reset the underlying environment."""
+        self.last_action  = None
+        self.last_reward  = 0.0
+        self.history      = []
+        # Total isolation: instantiate fresh environment
+        self.env          = LLMServeEnv()
+        return self.env.reset(task=task)
+
+
+_state = AppState()
+
 
 # ---------------------------------------------------------------------------
 # UI Dashboard (HTML/JS)
@@ -252,20 +285,30 @@ DASHBOARD_HTML = """
             try {
                 const res = await fetch('/run_live_demo?task=' + task, { method: 'POST' });
                 const result = await res.json();
-                if (result.status === 'ok') {
-                    alert('Simulation Complete! Baseline score achieved: ' + (result.score * 100).toFixed(1) + '%');
+                if (result.status === 'started') {
+                    // Poll for completion via /demo_status
+                    const poll = setInterval(async () => {
+                        const st = await fetch('/demo_status');
+                        const s = await st.json();
+                        if (!s.running) {
+                            clearInterval(poll);
+                            btn.disabled = false;
+                            btn.innerText = '🚀 Launch Baseline Agent';
+                            btn.classList.replace('bg-gray-700', 'bg-blue-600');
+                            dot.classList.replace('bg-blue-500', 'bg-green-500');
+                            status.innerText = 'SYSTEM READY';
+                            status.style.color = '#22c55e';
+                        }
+                    }, 2000);
                 } else {
                     alert('Error: ' + result.detail);
+                    btn.disabled = false;
+                    btn.innerText = '🚀 Launch Baseline Agent';
+                    btn.classList.replace('bg-gray-700', 'bg-blue-600');
                 }
             } catch (e) {
                 alert('Connection failure during simulation.');
-            } finally {
                 btn.disabled = false;
-                btn.innerText = '🚀 Launch Baseline Agent';
-                btn.classList.replace('bg-gray-700', 'bg-blue-600');
-                dot.classList.replace('bg-blue-500', 'bg-green-500');
-                status.innerText = 'SYSTEM READY';
-                status.style.color = '#22c55e';
             }
         }
 
@@ -274,12 +317,6 @@ DASHBOARD_HTML = """
 </body>
 </html>
 """
-
-@app.get("/", response_class=HTMLResponse)
-@app.get("/web", response_class=HTMLResponse)
-async def dashboard():
-    return DASHBOARD_HTML
-
 
 VIZ_HTML = """
 <!DOCTYPE html>
@@ -343,85 +380,25 @@ VIZ_HTML = """
 </html>
 """
 
+
+# ---------------------------------------------------------------------------
+# Routes — UI
+# ---------------------------------------------------------------------------
+
+@app.get("/", response_class=HTMLResponse)
+@app.get("/web", response_class=HTMLResponse)
+async def dashboard():
+    return DASHBOARD_HTML
+
+
 @app.get("/viz", response_class=HTMLResponse)
 async def viz_dashboard():
     return VIZ_HTML
 
+
 @app.get("/history")
 async def get_history():
-    return _history
-
-@app.get("/last_action", response_model=LLMServeAction, summary="Read last submitted action")
-async def get_last_action():
-    """Return the last action processed by the server."""
-    try:
-        if _last_action is None:
-            # Default starting state for the dashboard before first action
-            return LLMServeAction(scale=0, batch_size=64, spot_allocation=0.0)
-        return _last_action
-    except Exception as exc:
-        print(f"Error in /last_action: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
-
-@app.post("/run_live_demo", summary="Start a non-blocking animated simulation")
-async def run_live_demo(task: str = Query("easy", pattern="^(easy|medium|hard)$")):
-    """
-    Runs a live episode update using the baseline agent. 
-    Pauses between steps to allow the dashboard to poll for real-time data.
-    """
-    global _is_demo_running, _last_action, _last_reward
-    
-    if _is_demo_running:
-        return {"status": "error", "detail": "A demo is already in progress."}
-    
-    _is_demo_running = True
-    _last_reward = 0.0 # Reset reward visibility at start of demo
-    try:
-        # 1. Reset Global Env with selected task
-        obs = _env.reset(task=task)
-        steps = 0
-        max_steps = 500 # Run for 500 steps for a substantial 50-second demo
-        
-        while steps < max_steps:
-            try:
-                # 2. Get baseline action
-                action = _baseline(obs)
-                _last_action = action
-                
-                # 3. Step Global Env
-                obs, reward, done, info = _env.step(action)
-                _last_reward = reward
-                
-                # Record history
-                _history.append({
-                    "step": steps,
-                    "latency": obs.avg_latency,
-                    "gpus": obs.active_gpus,
-                    "queue": obs.queue_length,
-                    "reward": reward
-                })
-                if len(_history) > _MAX_HISTORY:
-                    _history.pop(0)
-    
-                steps += 1
-                
-                # 4. Critical: Yield control to the event loop so /state can be served
-                await asyncio.sleep(0.1) # 10 steps per second pace
-                
-                if done:
-                    break
-            except Exception as e:
-                print(f"Error within demo loop: {e}")
-                break
-        
-        stats = _env.episode_stats()
-        score = _grader._compute_score(stats)
-        return {"status": "ok", "score": score}
-        
-    except Exception as e:
-        return {"status": "error", "detail": str(e)}
-    finally:
-        _is_demo_running = False
+    return _state.history
 
 
 # ---------------------------------------------------------------------------
@@ -445,7 +422,7 @@ class GradeResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Endpoints
+# Core OpenEnv endpoints
 # ---------------------------------------------------------------------------
 
 @app.post("/reset", response_model=LLMServeObs, summary="Reset the environment")
@@ -455,15 +432,11 @@ async def reset(task: str = Query("easy", pattern="^(easy|medium|hard)$")):
 
     - **task**: difficulty level — `easy`, `medium`, or `hard`
     """
-    global _last_reward, _last_action, _history
     try:
-        _last_reward = 0.0
-        _last_action = None
-        _history = []
-        obs = _env.reset(task=task)
-        return obs
+        async with _state.lock:
+            obs = _state.reset_episode(task=task)
+            return obs
     except Exception as exc:
-        print(f"Error in /reset: {exc}")
         raise HTTPException(status_code=500, detail=str(exc))
 
 
@@ -474,31 +447,14 @@ async def step(action: LLMServeAction):
 
     Returns the new observation, reward, done flag, and debug info.
     """
-    global _last_action, _last_reward, _history
     try:
-        _last_action = action
-        obs, reward, done, info = _env.step(action)
-        _last_reward = reward
-        
-        # Record history
-        _history.append({
-            "step": len(_history), # approximated incremental step
-            "latency": obs.avg_latency,
-            "gpus": obs.active_gpus,
-            "queue": obs.queue_length,
-            "reward": reward
-        })
-        if len(_history) > _MAX_HISTORY:
-            _history.pop(0)
-            
-        return StepResponse(
-            observation = obs,
-            reward      = reward,
-            done        = done,
-            info        = info,
-        )
+        async with _state.lock:
+            _state.last_action = action
+            obs, reward, done, info = _state.env.step(action)
+            _state.last_reward = reward
+            _state.record(step=_state.env._step_count, obs=obs, reward=reward)
+            return StepResponse(observation=obs, reward=reward, done=done, info=info)
     except Exception as exc:
-        print(f"Error in /step: {exc}")
         raise HTTPException(status_code=500, detail=str(exc))
 
 
@@ -506,54 +462,122 @@ async def step(action: LLMServeAction):
 async def state():
     """Return the current environment observation without advancing the episode."""
     try:
-        return _env.state()
+        return _state.env.state()
     except Exception as exc:
-        print(f"Error in /state: {exc}")
         raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/health", summary="Liveness check")
 async def health():
-    """Simple health probe."""
+    """Simple health probe — always returns 200 when the server is up."""
     return {"status": "ok", "version": "1.0.1"}
 
-@app.get("/healthz", summary="HF Health check")
+
+@app.get("/healthz", summary="HF liveness check")
 async def healthz():
-    """Always returns ok: true for HF."""
+    """HuggingFace Spaces health probe."""
     return {"ok": True}
-
-
-@app.get("/live_reward", summary="Read last reward signal")
-async def get_live_reward():
-    """Return the last reward processed by the server."""
-    try:
-        return {"reward": _last_reward}
-    except Exception as exc:
-        print(f"Error in /live_reward: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.post("/grade", response_model=GradeResponse, summary="Grade the baseline agent")
 def grade(request: GradeRequest):
     """
-    Run a full episode with the built-in baseline agent and return its score.
-
-    Useful for verifying environment correctness and getting a reference score.
+    Run a full 1000-step episode with the built-in baseline agent and return
+    a normalised score in (0.01, 0.99).
     """
     try:
         if request.task not in ("easy", "medium", "hard"):
             raise HTTPException(status_code=400, detail="task must be easy, medium, or hard")
-    
-        score = _grader.grade(_baseline, task=request.task)
+            
+        # Create fresh grader instance (full isolation)
+        grader = LLMServeGrader()
+        score = grader.grade(_state.baseline, task=request.task)
+        
         return GradeResponse(task=request.task, score=score)
     except Exception as exc:
-        print(f"Error in /grade: {exc}")
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-def main():
+# ---------------------------------------------------------------------------
+# Supplementary endpoints (dashboard helpers)
+# ---------------------------------------------------------------------------
+
+@app.get("/last_action", response_model=LLMServeAction, summary="Read last submitted action")
+async def get_last_action():
+    """Return the last action processed by the server."""
+    if _state.last_action is None:
+        return LLMServeAction(scale=0, batch_size=64, spot_allocation=0.0)
+    return _state.last_action
+
+
+@app.get("/live_reward", summary="Read last reward signal")
+async def get_live_reward():
+    """Return the last step reward for dashboard display."""
+    return {"reward": _state.last_reward}
+
+
+@app.get("/demo_status", summary="Check whether a live demo is running")
+async def demo_status():
+    """Polled by the dashboard to detect when a background demo finishes."""
+    return {"running": _state.is_demo_running}
+
+
+# ---------------------------------------------------------------------------
+# Background demo task — runs simulation without blocking the event loop
+# ---------------------------------------------------------------------------
+
+async def _run_demo_background(task: str, max_steps: int = 500) -> None:
+    """
+    Simulate up to *max_steps* using the baseline agent.
+    Runs as a background asyncio task so /run_live_demo returns immediately.
+    """
+    _state.is_demo_running = True
+    _state.last_reward = 0.0
+    try:
+        async with _state.lock:
+            obs = _state.reset_episode(task=task)
+            
+        for step_num in range(max_steps):
+            # Compute action outside the lock (baseline does not mutate state)
+            action = _state.baseline(obs)
+            
+            async with _state.lock:
+                _state.last_action = action
+                obs, reward, done, _ = _state.env.step(action)
+                _state.last_reward = reward
+                _state.record(step=step_num, obs=obs, reward=reward)
+                
+            # Yield to the event loop so /state and /live_reward can be served
+            await asyncio.sleep(0.1)
+            
+            if done:
+                break
+    except Exception as exc:
+        print(f"[demo] error: {exc}")
+    finally:
+        _state.is_demo_running = False
+
+
+@app.post("/run_live_demo", summary="Start a non-blocking animated simulation")
+async def run_live_demo(task: str = Query("easy", pattern="^(easy|medium|hard)$")):
+    """
+    Kick off a background simulation of the baseline agent.
+    Returns immediately with ``{"status": "started"}``; poll ``/demo_status``
+    to detect completion.
+    """
+    if _state.is_demo_running:
+        return {"status": "error", "detail": "A demo is already in progress."}
+
+    asyncio.create_task(_run_demo_background(task))
+    return {"status": "started"}
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+def main() -> None:
     import uvicorn
-    import os
     port = int(os.getenv("PORT", 7860))
     uvicorn.run("server.app:app", host="0.0.0.0", port=port)
 

@@ -35,4 +35,4 @@ extraPaths = ["."]
 
 [tool.setuptools]
 packages = ["server"]
-py-modules = ["environment", "models", "grader", "inference", "baseline", "client", "dashboard", "app_visual", "patch", "show_scores", "test_grader"]
+py-modules = ["environment", "models", "grader", "inference", "baseline", "client"]

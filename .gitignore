@@ -166,18 +166,19 @@ yarn-error.log*
 *.dockerlog
 *.dockerignore
 
-# Hackathon / Environment Clutter
-walkthrough.md
-assets/
-*_out.txt
+# Debug output artifacts (auto-generated, not part of the environment)
 *_output.txt
-inference_output.txt
-test_out.txt
-grade_out.txt
-*.txt
+*_scores*.txt
+*_validation*.txt
+tmp_*.txt
+final_*.txt
+stress_test_*.txt
+openenv_val*.txt
+variance_results.txt
+grader_output.txt
+parsed_scores.txt
+scores.txt
+output.txt
+
+# Lock files (environment managed via requirements.txt)
 uv.lock
-patch.py
-baseline.py
-show_scores.py
-test_grader.py
-!requirements.txt

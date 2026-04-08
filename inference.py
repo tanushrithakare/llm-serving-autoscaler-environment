@@ -213,8 +213,14 @@ class ReactiveController:
 
 
 
-SYSTEM_PROMPT = ""
-
+# ---------------------------------------------------------------------------
+# Architecture: Hybrid LLM + Reactive Controller
+# ---------------------------------------------------------------------------
+# The ReactiveController handles every step with deterministic demand-driven
+# logic (fast, zero-latency). The LLM is consulted periodically (every
+# LLM_CALL_INTERVAL steps) to provide high-level strategic guidance and satisfy
+# the OpenEnv proxy compliance requirement. LLM suggestions that fail to parse
+# are silently discarded — the reactive controller always remains in control.
 
 
 # ---------------------------------------------------------------------------
