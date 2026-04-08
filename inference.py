@@ -26,6 +26,7 @@ import json
 import math
 import os
 import sys
+import numpy as np
 import textwrap
 from typing import List, Optional
 
@@ -364,7 +365,8 @@ async def run_task(
             await asyncio.gather(*llm_tasks, return_exceptions=True)
 
         score = sum(rewards) / MAX_TOTAL_REWARD if MAX_TOTAL_REWARD > 0 else 0.0
-        score = min(max(score, 0.0), 1.0)  # clamp to [0, 1]
+        # Strictly between 0 and 1 as required by Phase 2 deep validation
+        score = float(np.clip(score, 0.01, 0.99))
         success = score >= SUCCESS_THRESHOLD
 
     except Exception as exc:

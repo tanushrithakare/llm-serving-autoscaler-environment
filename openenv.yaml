@@ -74,5 +74,3 @@ reward:
 grading:
   latency_weight:    0.4
   throughput_weight: 0.4
-  cost_weight:       0.2
-  score_range: [0.0, 1.0]
