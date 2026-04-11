@@ -6,6 +6,6 @@
 
 """Sentinel Soc environment server components."""
 
-from ..environment import SentinelSOCEnv
+from environment import SentinelSOCEnv
 
 __all__ = ["SentinelSOCEnv"]
