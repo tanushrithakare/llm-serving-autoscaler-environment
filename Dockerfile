@@ -21,7 +21,7 @@ ENV PORT=7860
 COPY . .
 
 # Install the project and dependencies via uv
-RUN uv sync --frozen
+RUN uv sync
 
 # Expose the official OpenEnv port
 EXPOSE 7860
