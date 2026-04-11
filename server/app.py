@@ -25,6 +25,24 @@ def get_env(task: str = "leak-investigation"):
     return _env_instance
 
 
+@app.get("/")
+def root():
+    return {
+        "service": "Sentinel-SOC",
+        "description": "Forensic AI environment for cybersecurity incident response",
+        "status": "running",
+        "endpoints": {
+            "health": "/health",
+            "reset": "POST /reset?task=easy|medium|hard",
+            "step": "POST /step",
+            "state": "GET /state",
+            "grade": "POST /grade",
+            "history": "GET /history",
+            "docs": "/docs"
+        }
+    }
+
+
 @app.get("/health")
 def health():
     return {"status": "healthy", "service": "sentinel-soc"}
