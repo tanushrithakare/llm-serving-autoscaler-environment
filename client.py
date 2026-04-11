@@ -1,173 +1,30 @@
-"""
-client.py — Async Docker client for the LLM Serving Autoscaler Environment.
+import httpx
+from models import IncidentAction, IncidentObs
 
-Provides LLMAutoscalerEnv with the standard OpenEnv client interface:
-  - from_docker_image(image_name) : start container, return connected client
-  - reset(task)                   : POST /reset
-  - step(action)                  : POST /step
-  - close()                       : stop + remove container
-"""
+class SentinelSOCClient:
+    def __init__(self, base_url: str = "http://localhost:7860"):
+        self.base_url = base_url
+        self.client = httpx.Client(timeout=30.0)
 
-import asyncio
-import socket
-import subprocess
-from dataclasses import dataclass, field
-from typing import Optional
+    def reset(self, task: str = "leak-investigation") -> IncidentObs:
+        response = self.client.post(f"{self.base_url}/reset", params={"task": task})
+        response.raise_for_status()
+        return IncidentObs(**response.json())
 
-import httpx  # type: ignore
+    def step(self, action: IncidentAction) -> dict:
+        response = self.client.post(f"{self.base_url}/step", json=action.model_dump())
+        response.raise_for_status()
+        return response.json()
 
-import os
-import sys
-# Force the project root onto sys.path — works regardless of cwd or invocation method.
-_PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT)
+    def state(self) -> IncidentObs:
+        response = self.client.get(f"{self.base_url}/state")
+        response.raise_for_status()
+        return IncidentObs(**response.json())
 
-from models import LLMServeObs, LLMServeAction  # type: ignore # noqa: E402
+    def grade(self) -> float:
+        response = self.client.post(f"{self.base_url}/grade")
+        response.raise_for_status()
+        return response.json()["score"]
 
-
-# ---------------------------------------------------------------------------
-# Step result wrapper
-# ---------------------------------------------------------------------------
-
-@dataclass
-class StepResult:
-    """Result returned by reset() and step()."""
-    observation: LLMServeObs
-    reward: float = 0.0
-    done: bool = False
-    info: dict = field(default_factory=dict)
-
-
-# ---------------------------------------------------------------------------
-# Async environment client
-# ---------------------------------------------------------------------------
-
-class LLMAutoscalerEnv:
-    """
-    Async client that manages a Docker container running the
-    LLM Serving Autoscaler server and communicates via HTTP.
-    """
-
-    def __init__(self, base_url: str, container_id: Optional[str] = None):
-        self._base_url = base_url
-        self._container_id = container_id
-        self._client = httpx.AsyncClient(base_url=base_url, timeout=30.0)
-
-    # ------------------------------------------------------------------
-    # Factory
-    # ------------------------------------------------------------------
-
-    @classmethod
-    async def from_docker_image(cls, image_name: str) -> "LLMAutoscalerEnv":
-        """Start a Docker container from *image_name* and return a connected client."""
-        port = _find_free_port()
-
-        result = subprocess.run(
-            ["docker", "run", "-d", "-p", f"{port}:7860", image_name],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"docker run failed: {result.stderr.strip()}")
-
-        container_id = result.stdout.strip()
-        base_url = f"http://localhost:{port}"
-        env = cls(base_url=base_url, container_id=container_id)
-        await env._wait_for_health()
-        return env
-
-    # ------------------------------------------------------------------
-    # OpenEnv API
-    # ------------------------------------------------------------------
-
-    async def reset(self, task: str = "easy") -> StepResult:
-        """POST /reset?task=..."""
-        resp = await self._client.post(f"/reset?task={task}")
-        resp.raise_for_status()
-        obs = LLMServeObs(**resp.json())
-        return StepResult(observation=obs, reward=0.0, done=False, info={})
-
-    async def step(self, action: LLMServeAction) -> StepResult:
-        """POST /step with JSON action body."""
-        resp = await self._client.post("/step", json=action.model_dump())
-        resp.raise_for_status()
-        data = resp.json()
-        obs = LLMServeObs(**data["observation"])
-        return StepResult(
-            observation=obs,
-            reward=data["reward"],
-            done=data["done"],
-            info=data.get("info", {}),
-        )
-
-    async def close(self) -> None:
-        """Stop and remove the Docker container."""
-        await self._client.aclose()
-        if self._container_id:
-            subprocess.run(
-                ["docker", "stop", self._container_id],
-                capture_output=True,
-            )
-            subprocess.run(
-                ["docker", "rm", self._container_id],
-                capture_output=True,
-            )
-
-    # ------------------------------------------------------------------
-    # Internal
-    # ------------------------------------------------------------------
-
-    async def _wait_for_health(self, timeout: int = 60) -> None:
-        """Poll GET /health until the container is ready."""
-        for _ in range(timeout * 2):
-            try:
-                resp = await self._client.get("/health")
-                if resp.status_code == 200:
-                    return
-            except Exception:
-                pass
-            await asyncio.sleep(0.5)
-        raise TimeoutError(f"Container not healthy after {timeout}s")
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _find_free_port() -> int:
-    """Return an available TCP port on localhost."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("", 0))
-        return s.getsockname()[1]
-
-
-# ---------------------------------------------------------------------------
-# Direct Mode (No-Docker Fallback)
-# ---------------------------------------------------------------------------
-
-class LocalLLMAutoscalerEnv:
-    """
-    A synchronous-to-async wrapper that runs the environment directly in-process.
-    Useful when Docker is not available.
-    """
-
-    def __init__(self):
-        from environment import LLMServeEnv  # type: ignore # noqa: E402
-        self._env = LLMServeEnv()
-
-    async def reset(self, task: str = "easy") -> StepResult:
-        obs = self._env.reset(task=task)
-        return StepResult(observation=obs, reward=0.0, done=False, info={})
-
-    async def step(self, action: LLMServeAction) -> StepResult:
-        obs, reward, done, info = self._env.step(action)
-        return StepResult(
-            observation=obs,
-            reward=reward,
-            done=done,
-            info=info,
-        )
-
-    async def close(self) -> None:
-        pass
+    def close(self):
+        self.client.close()

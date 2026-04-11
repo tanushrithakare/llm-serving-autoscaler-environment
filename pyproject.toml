@@ -1,38 +1,37 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "llm-serving-autoscaler-environment"
+name = "openenv-sentinel-soc"
 version = "1.0.0"
-description = "OpenEnv-compatible RL environment simulating an AI request serving system"
-readme = "README.md"
+description = "Sentinel-SOC: Expert Security Incident Analyzer environment"
 requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.110.0",
-    "uvicorn[standard]>=0.29.0",
-    "pydantic>=2.6.0",
-    "numpy>=1.26.0",
-    "openenv-core>=0.2.0",
-    "httpx>=0.27.0",
+    "openenv-core[core]>=0.2.2",
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic>=2.0.0",
+    "numpy>=1.24.0",
+    "httpx>=0.25.0",
     "openai>=1.0.0",
-    "pytest>=8.0.0",
-    "streamlit>=1.30.0",
-    "pandas>=2.0.0",
-    "plotly>=5.18.0",
-    "python-dotenv>=1.2.2",
-    "huggingface-hub>=1.9.0",
+    "python-dotenv>=1.0.0",
+    "python-multipart>=0.0.6",
 ]
 
 [project.scripts]
 server = "server.app:main"
 
-[tool.pyrefly]
-import_root = "."
-
-[tool.pyright]
-extraPaths = ["."]
-
 [tool.setuptools]
 packages = ["server"]
-py-modules = ["environment", "models", "grader", "inference", "baseline", "client"]
+py-modules = ["models", "client", "inference", "baseline", "grader"]
+
+[tool.pyright]
+include = ["."]
+extraPaths = ["."]
+executionEnvironments = [
+  { root = "." }
+]

@@ -1,12 +1,12 @@
-name: llm-serving-autoscaler-environment
+name: sentinel-soc
 version: "1.0.0"
 description: >
-  OpenEnv-compatible RL environment simulating an AI request serving system
-  where an agent manages GPU resources under dynamic traffic load.
+  Expert Security Incident Analyzer environment. An agent acts as a SOC Analyst 
+  triaging and resolving cyber-security threats across logs, code, and network traces.
 
 entry_point:
   host: "0.0.0.0"
-  port: 8000
+  port: 7860
 
 endpoints:
   reset:
@@ -21,7 +21,7 @@ endpoints:
   step:
     method: POST
     path: /step
-    body: LLMServeAction
+    body: IncidentAction
 
   state:
     method: GET
@@ -37,44 +37,38 @@ endpoints:
 
 tasks:
   - name: easy
-    description: Constant low traffic. Stable demand.
-    seed: 42
-
+    description: Detect and mitigate a production secret key leak in logs.
+    difficulty: easy
+    max_steps: 10
+  
   - name: medium
-    description: Variable sinusoidal traffic. Moderate spikes.
-    seed: 42
-
+    description: Identify a SQL Injection vulnerability exploited by an external attacker.
+    difficulty: medium
+    max_steps: 15
+  
   - name: hard
-    description: Heavy traffic spike between steps 200–500. Stress test.
-    seed: 42
+    description: Detect and remove a malicious backdoor planted in a vendor dependency.
+    difficulty: hard
+    max_steps: 20
 
 observation_space:
-  active_gpus:     { type: int, min: 1,   max: 100  }
-  queue_length:    { type: int, min: 0              }
-  incoming_rate:   { type: float, min: 0.0          }
-  avg_latency:     { type: float, min: 0.0          }
-  batch_size:      { type: int, min: 32, max: 128    }
-  cache_load:      { type: float, min: 0.0, max: 1.0 }
-  spot_gpu_ratio:  { type: float, min: 0.0, max: 1.0 }
+  type: object
+  fields:
+    logs: { type: string }
+    code_snippet: { type: string }
+    incident_thread: { type: string }
+    status: { type: string }
+    steps_remaining: { type: int }
+    reward_signal: { type: float }
 
 action_space:
-  scale:           { type: int,   min: -1,  max: 1   }
-  batch_size:      { type: int,   min: 32,  max: 128  }
-  spot_allocation: { type: float, min: 0.0, max: 1.0  }
+  type: object
+  fields:
+    reasoning: { type: string }
+    tool: { type: string }
+    parameters: { type: string }
 
-episode_length: 1000
-
-reward:
-  description: >
-    Prioritises SLA (Latency) management. Penalises queue overflow and GPU
-    inefficiency. Normalized to [-1, 1].
-  formula: >
-    0.6 * LatencyScore + 0.2 * ThroughputScore
-    - 0.15 * GPUCost - 0.3 * QueuePenalty
-    - 0.05 * BatchPenalty
+reward_range: [-1.0, 1.0]
 
 grading:
-  latency_weight:    0.4
-  throughput_weight: 0.4
-  cost_weight:       0.2
-  score_range:       [0.01, 0.99]   # open interval — 0.0/1.0 reserved for errors
+  score_range: [0.01, 0.99]
