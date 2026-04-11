@@ -14,15 +14,6 @@ from models import IncidentAction, IncidentObs
 
 app = FastAPI()
 
-# Mount static files (isolated)
-os.makedirs(os.path.join(os.path.dirname(__file__), "static"), exist_ok=True)
-app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
-
-@app.get("/")
-@app.get("/dashboard")
-def read_dashboard():
-    return FileResponse(os.path.join(os.path.dirname(__file__), "static", "dashboard.html"))
-
 # Singleton environment instance
 _env_instance = None
 
@@ -77,7 +68,7 @@ def get_history():
 
 def main():
     import uvicorn
-    uvicorn.run("server.app:app", host="0.0.0.0", port=7860, reload=False)
+    uvicorn.run("app:app", host="0.0.0.0", port=7860, reload=False)
 
 if __name__ == "__main__":
     main()
