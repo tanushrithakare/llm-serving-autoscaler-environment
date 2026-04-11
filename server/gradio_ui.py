@@ -66,7 +66,7 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
             history_table = gr.Dataframe(
                 headers=["Step", "Tool", "Parameters", "Feedback", "Confidence"],
                 datatype=["number", "str", "str", "str", "number"],
-                col_widths=[50, 150, 250, 350, 100],
+                column_widths=[50, 150, 250, 350, 100],
                 interactive=False
             )
 
