@@ -23,11 +23,11 @@ dependencies = [
 ]
 
 [project.scripts]
-server = "app:main"
+server = "server.app:main"
 
 [tool.setuptools]
-packages = []
-py-modules = ["models", "client", "inference", "baseline", "grader", "app", "environment"]
+packages = ["server"]
+py-modules = ["models", "client", "inference", "baseline", "grader", "environment"]
 
 [tool.pyright]
 include = ["."]
