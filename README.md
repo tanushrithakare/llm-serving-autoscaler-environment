@@ -1,3 +1,19 @@
+---
+title: Sentinel-SOC
+emoji: 🛡️
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+short_description: Forensic AI environment for cybersecurity incident response
+tags:
+  - openenv
+  - security
+  - hackathon
+  - pytorch
+pinned: false
+---
+
 # Sentinel-SOC: Security Incident Analyzer 🛡️
 
 **Winner-Tier Submission for the Meta PyTorch Hackathon (OpenEnv Category)**
