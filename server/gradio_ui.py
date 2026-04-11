@@ -55,7 +55,7 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                 gr.Markdown("### 🔬 FORENSIC DATA")
                 with gr.Tabs():
                     with gr.TabItem("📄 System Logs"):
-                        logs_output = gr.Code(label="Live Logs", language="text", lines=15, interactive=False)
+                        logs_output = gr.Code(label="Live Logs", language=None, lines=15, interactive=False)
                     with gr.TabItem("💻 Source Inspector"):
                         code_output = gr.Code(label="Target Source Code", language="python", lines=15, interactive=False)
                     with gr.TabItem("🕵️ Investigation Thread"):
