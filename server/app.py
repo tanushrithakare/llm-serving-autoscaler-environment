@@ -11,6 +11,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from environment import SentinelSOCEnv
 from models import IncidentAction, IncidentObs
+import gradio as gr
+from server.gradio_ui import create_gradio_ui
 
 app = FastAPI()
 
@@ -27,20 +29,8 @@ def get_env(task: str = "leak-investigation"):
 
 @app.get("/")
 def root():
-    return {
-        "service": "Sentinel-SOC",
-        "description": "Forensic AI environment for cybersecurity incident response",
-        "status": "running",
-        "endpoints": {
-            "health": "/health",
-            "reset": "POST /reset?task=easy|medium|hard",
-            "step": "POST /step",
-            "state": "GET /state",
-            "grade": "POST /grade",
-            "history": "GET /history",
-            "docs": "/docs"
-        }
-    }
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/ui")
 
 
 @app.get("/health")
@@ -83,6 +73,10 @@ def grade():
 def get_history():
     env = get_env()
     return {"history": env.history}
+
+# Mount Gradio UI
+ui_app = create_gradio_ui()
+app = gr.mount_gradio_app(app, ui_app, path="/ui")
 
 def main():
     import uvicorn
