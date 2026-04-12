@@ -12,7 +12,12 @@ tags:
   - security
   - forensics
   - cybersecurity
+  - agent
+  - rl
+  - reinforcement-learning
+  - benchmark
   - pytorch
+  - open-env
 ---
 
 **Sentinel-SOC** is an AI-powered Security Operations Center where LLM agents act as autonomous security analysts — investigating, reasoning through adversarial noise, and mitigating real-world cyber threats using structured forensic tools.
