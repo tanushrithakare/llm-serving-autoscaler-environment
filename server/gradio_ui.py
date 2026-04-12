@@ -217,8 +217,8 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
             '</div>'
         )
         gr.HTML(
-            '<p style="margin:0 0 10px 0; font-size:0.78em; color:#888; letter-spacing:0.05em;">'
-            '🟢 System Operational &nbsp;•&nbsp; AI Analyst Active &nbsp;•&nbsp; Kill Chain Tracking Enabled'
+            '<p style="margin:2px 0 8px 0; font-size:0.76em; color:#777; letter-spacing:0.06em;">'
+            '🟢 Operational &nbsp;•&nbsp; Analyst Active &nbsp;•&nbsp; Kill Chain Enabled'
             '</p>'
         )
         gr.Markdown("---")
@@ -229,7 +229,7 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
             # ── LEFT: Control Panel ──────────────────────────────────────────
             with gr.Column(scale=1, min_width=240):
 
-                gr.Markdown("### 📊 Status")
+                gr.Markdown("### 📊 System Status")
                 status_box   = gr.Markdown("**Status**: Active",      elem_classes=["hud-card"])
                 severity_box = gr.Markdown("**Severity**: 🟠 Medium", elem_classes=["hud-card-warn"])
                 steps_box    = gr.Markdown("**Steps Remaining**: 20", elem_classes=["hud-card"])
@@ -270,7 +270,7 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                 with gr.Tabs():
 
                     with gr.TabItem("📄 Logs"):
-                        gr.Markdown("##### 📡 Live Telemetry Feed")
+                        gr.Markdown("## 📡 Live Telemetry Feed")
                         logs_output = gr.Code(
                             label="",
                             language="shell",
