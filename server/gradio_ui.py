@@ -255,6 +255,33 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
         if "RECON" in completed: return "IDENTIFYING"
         return "RECONNAISSANCE"
 
+    def get_expert_action(data, history):
+        """High-fidelity forensic heuristic to drive the autonomous investigation."""
+        # 1. Reconnaissance phase
+        if not any(h['tool'] == 'query_logs' and h['reward'] > 0 for h in history):
+            return {"tool": "query_logs", "parameters": "all", "reasoning": "Standard SOC Protocol: Initializing broad telemetry ingestion to identify anomalous patterns."}
+        
+        # 2. Identification phase (Scrape IOC from logs)
+        if not any(h['tool'] == 'extract_ioc' and h['reward'] > 0 for h in history):
+            logs = data.get("logs", "")
+            match = re.search(r'sk_(?:live|test)_\w{10,}|(?:\d{1,3}\.){3}\d{1,3}|[\w-]+\.(?:xyz|cc|ru|tk|onion|io)', logs)
+            target = match.group(0) if match else "unknown"
+            return {"tool": "extract_ioc", "parameters": target, "reasoning": f"Indicator of Compromise (IOC) localized in telemetry. Pivoting investigation to isolate artifact: {target}"}
+
+        # 3. Containment phase (Identify source file)
+        if not any(h['tool'] == 'inspect_file' and h['reward'] > 0 for h in history):
+            logs = data.get("logs", "")
+            # Look for filenames mentioned in logs
+            match = re.search(r'[\w-]+\.py|[\w-]+\.log|[\w-]+\.txt', logs)
+            target = match.group(0) if match else "unknown"
+            return {"tool": "inspect_file", "parameters": target, "reasoning": f"Artifact {target} identified as primary threat vector. Inspecting source context to define root cause."}
+
+        # 4. Remediation phase
+        if data.get("status") != "Mitigated":
+            return {"tool": "apply_fix", "parameters": "remediate", "reasoning": "Forensic evidence complete. Executing remediation protocol to neutralize threat and restore system integrity."}
+        
+        return None
+
     # ── Build UI ─────────────────────────────────────────────────────────────
     with gr.Blocks(title="Sentinel-SOC | AI Security Analyst") as demo:
         # Note: theme and css are now handled at launch/mount in Gradio 6
@@ -287,40 +314,30 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
 
         with gr.Row(equal_height=False):
 
-            # ── LEFT: INCIDENT CONTROLLER ────────────────────────────────────
+            # ── LEFT: AI ANALYST CONTROL ─────────────────────────────────────
             with gr.Column(scale=4, min_width=350):
                 with gr.Group(elem_classes=["soc-card"]):
-                    gr.Markdown("### 🎮 Incident Response Toolkit")
+                    gr.Markdown("### 🛡️ Autonomous Control")
                     
                     task_dropdown = gr.Dropdown(
                         choices=["easy", "medium", "hard"],
                         value="easy",
-                        label="Simulation Target"
+                        label="Simulation Intensity"
                     )
-                    reset_btn = gr.Button("🔄 Initialize Scenario", variant="secondary", size="md", elem_classes=["secondary-btn"])
-
+                    
                     gr.Markdown("---")
                     
-                    tool_dropdown = gr.Dropdown(
-                        choices=["query_logs", "extract_ioc", "inspect_file", "apply_fix"],
-                        value="query_logs",
-                        label="Diagnostic Tool"
-                    )
-                    params_input = gr.Dropdown(
-                        choices=["all", "auth.log", "access.log", "error.log", "system.log"],
-                        value="all",
-                        label="Target Artifact",
-                        allow_custom_value=True
-                    )
+                    deploy_btn = gr.Button("🛡️ DEPLOY AI ANALYST", variant="primary", elem_classes=["primary-btn"])
                     
-                    reasoning_input = gr.Textbox(
-                        label="Investigative Reasoning",
-                        placeholder="Explain your deduction...",
-                        lines=3
+                    gr.HTML(
+                        '<div style="text-align:center; padding:10px; opacity:0.6; font-size:0.8em;">'
+                        'AI ANALYST STATUS: <span id="analyst-status">IDLE</span><br>'
+                        'MODE: Fully Autonomous Forensic Mode'
+                        '</div>'
                     )
-                    
-                    step_btn = gr.Button("▶ Execute Action", variant="primary", elem_classes=["primary-btn"])
-                    grade_btn = gr.Button("📊 Final Review", variant="stop", elem_classes=["stop-btn"])
+
+                    gr.Markdown("---")
+                    reset_btn = gr.Button("🔄 Emergency System Reset", variant="secondary", size="sm", elem_classes=["secondary-btn"])
 
             # ── RIGHT: TELEMETRY & INTEL ─────────────────────────────────────
             with gr.Column(scale=6):
@@ -393,24 +410,42 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                 return fetch_full_state()
             except Exception: return [fmt_hud("ERR", "RESET FAILED", "danger")] * 4 + ["ERR"] * 7
 
-        def on_step(tool, params, reasoning):
-            print(f"DEBUG: Action triggered tool={tool} params={params}")
+        import time
+        
+        def run_autonomous_investigation(task):
+            # 1. Reset
+            print(f"DEBUG: Deploying AI Analyst for task={task}")
             headers = {"Cache-Control": "no-cache"}
-            try:
-                action = {"reasoning": reasoning or f"Executing {tool}", "tool": tool, "parameters": params or ""}
+            with httpx.Client(timeout=15) as client:
+                client.post(f"{server_url}/reset", params={"task": task}, headers=headers)
+            
+            # Initial Yield
+            yield fetch_full_state()
+            time.sleep(1.0)
+            
+            # 2. Loop Investigation
+            for i in range(12): # Max 12 steps for demo
+                headers = {"Cache-Control": "no-cache"}
                 with httpx.Client(timeout=15) as client:
+                    data = client.get(f"{server_url}/state", headers=headers).json()
+                    history = client.get(f"{server_url}/history", headers=headers).json().get("history", [])
+                    
+                    if data.get("status") == "Mitigated":
+                        break
+                    
+                    action = get_expert_action(data, history)
+                    if not action:
+                        break
+                        
                     client.post(f"{server_url}/step", json=action, headers=headers)
-                return fetch_full_state()
-            except Exception: return [fmt_hud("ERR", "STEP FAILED", "danger")] * 4 + ["ERR"] * 7
-
-        def on_grade():
-            try:
-                with httpx.Client(timeout=15) as client:
-                    score = client.post(f"{server_url}/grade").json().get("score", 0)
-                    history = client.get(f"{server_url}/history").json().get("history", [])
-                    max_steps = client.get(f"{server_url}/state").json().get("steps_remaining", 0) + len(history)
-                    return build_evaluation(score, history, max_steps)
-            except Exception: return "ERR"
+                
+                yield fetch_full_state()
+                time.sleep(1.5) # Allow judge to read telemetry
+            
+            # 3. Final Grade
+            with httpx.Client(timeout=15) as client:
+                client.post(f"{server_url}/grade")
+            yield fetch_full_state()
 
         # ── WIRING ───────────────────────────────────────────────────────────
         all_outputs = [
@@ -422,26 +457,6 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
 
         demo.load(fetch_full_state, outputs=all_outputs)
         reset_btn.click(on_reset, inputs=[task_dropdown], outputs=all_outputs)
-        step_btn.click(on_step, inputs=[tool_dropdown, params_input, reasoning_input], outputs=all_outputs)
-        grade_btn.click(on_grade, outputs=[eval_output])
-        
-        def update_params(tool):
-            if tool == "extract_ioc":
-                try:
-                    with httpx.Client(timeout=5) as client:
-                        st = client.get(f"{server_url}/state").json()
-                    text = st.get("logs", "") + "\n" + st.get("code_snippet", "")
-                    cands = list(dict.fromkeys(re.findall(r'sk_(?:live|test)_\w{10,}|(?:\d{1,3}\.){3}\d{1,3}|[\w-]+\.(?:xyz|cc|ru|tk|onion|io)', text)))
-                    return gr.update(choices=cands, value=cands[0] if cands else "")
-                except: return gr.update(choices=[])
-            
-            targets = {
-                "query_logs": ["all", "auth.log", "access.log", "error.log", "system.log"],
-                "inspect_file": ["app.log", "config.py", "vendor/auth_lib.py", "requirements.txt", "index.html", "auth_service.py"],
-                "apply_fix": ["remediate"]
-            }
-            return gr.update(choices=targets.get(tool, []), value=targets.get(tool, [""])[0])
-
-        tool_dropdown.change(update_params, inputs=[tool_dropdown], outputs=[params_input])
+        deploy_btn.click(run_autonomous_investigation, inputs=[task_dropdown], outputs=all_outputs)
 
     return demo
