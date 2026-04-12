@@ -12,25 +12,25 @@ CSS = """
     max-width: 1200px !important;
     margin: 0 auto !important;
     padding: 20px !important;
-    background-color: #0d1117 !important;
+    background-color: #0d0d0d !important;
 }
 
-body { background-color: #0d1117 !important; color: #e6edf3 !important; }
+body { background-color: #0d0d0d !important; color: #e0e0e0 !important; }
 
-/* SOC-Grade Cards */
+/* SOC-Grade Cards - NEUTRAL GREY */
 .soc-card {
-    background: #161b22 !important;
-    border: 1px solid #30363d !important;
+    background: #1c1c1c !important;
+    border: 1px solid #444 !important;
     border-radius: 8px !important;
     padding: 18px !important;
     margin: 10px 0 !important;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.6) !important;
 }
 
-/* SOC Header Bar */
+/* SOC Header Bar - Deep Grey */
 .soc-header {
-    background: #161b22;
-    border: 1px solid #30363d;
+    background: #1c1c1c;
+    border: 1px solid #444;
     border-radius: 6px;
     padding: 15px 25px;
     margin-bottom: 20px;
@@ -47,17 +47,17 @@ body { background-color: #0d1117 !important; color: #e6edf3 !important; }
 .dot-active { background-color: #3b82f6; box-shadow: 0 0 10px #3b82f6; }
 .dot-shield { background-color: #facc15; box-shadow: 0 0 10px #facc15; }
 
-/* HUD Quick Stats */
+/* HUD Quick Stats - Grey Baseline */
 .hud-card {
-    background: #161b22 !important;
-    border: 1px solid #30363d !important;
+    background: #1c1c1c !important;
+    border: 1px solid #444 !important;
     border-radius: 8px;
     padding: 12px;
     text-align: center;
     min-height: 90px;
 }
-.hud-card p { margin: 0; color: #8b949e; font-size: 0.8em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-.hud-card h3 { margin: 8px 0 0 0; font-size: 1.6em; font-weight: 700; color: #e6edf3; }
+.hud-card p { margin: 0; color: #888; font-size: 0.8em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.hud-card h3 { margin: 8px 0 0 0; font-size: 1.6em; font-weight: 700; color: #eee; }
 
 /* HUD Success/Danger/Warning states */
 .hud-green h3 { color: #00ff9c !important; }
@@ -66,15 +66,15 @@ body { background-color: #0d1117 !important; color: #e6edf3 !important; }
 .hud-blue h3 { color: #58a6ff !important; }
 
 /* Tab styling */
-.tabs > .tab-nav { border-bottom: 1px solid #30363d !important; gap: 8px !important; }
+.tabs > .tab-nav { border-bottom: 1px solid #444 !important; gap: 8px !important; }
 .tabs > .tab-nav button.selected { border-bottom: 2px solid #00ff9c !important; color: #00ff9c !important; background: transparent !important; }
 
-/* Buttons - GitHub Style */
+/* Buttons - Grey & Neon */
 .primary-btn {
-    background: #238636 !important;
+    background: #333 !important;
     color: #ffffff !important;
     font-weight: 600 !important;
-    border: 1px solid rgba(240,246,252,0.1) !important;
+    border: 1px solid #444 !important;
     padding: 10px 20px !important;
 }
 .primary-btn:hover { background: #2ea043 !important; box-shadow: 0 0 12px rgba(46,160,67,0.4); }
@@ -94,11 +94,11 @@ body { background-color: #0d1117 !important; color: #e6edf3 !important; }
 .secondary-btn:hover { background: #30363d !important; }
 
 /* Code and Input styles */
-.code-wrap { border: 1px solid #30363d !important; border-radius: 6px !important; }
+.code-wrap { border: 1px solid #444 !important; border-radius: 6px !important; }
 textarea, input, select {
-    background-color: #0d1117 !important;
-    border: 1px solid #30363d !important;
-    color: #e6edf3 !important;
+    background-color: #111 !important;
+    border: 1px solid #444 !important;
+    color: #e0e0e0 !important;
 }
 """
 
