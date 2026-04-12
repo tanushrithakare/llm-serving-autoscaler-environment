@@ -69,17 +69,19 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
             return "No investigation steps recorded yet."
         lines = []
         for h in history:
-            step    = h.get("step", "?")
-            tool    = h.get("tool", "unknown")
-            params  = h.get("params", "")
-            reward  = h.get("reward", 0)
+            step     = h.get("step", "?")
+            tool     = h.get("tool", "unknown")
+            params   = h.get("params", "")
+            reward   = h.get("reward", 0)
             feedback = h.get("feedback", "")
-            status  = h.get("status", "INFO")
-            icon    = {"SUCCESS": "🟢", "REJECTED": "🔴", "INFO": "🟡"}.get(status, "⚪")
-            sign    = "+" if reward > 0 else ""
+            icon     = "🟢" if reward > 0 else "🔴" if reward < 0 else "🟡"
+            sign     = "+" if reward > 0 else ""
             lines.append(
-                f"**Step {step}** {icon} `{tool}` → `{params}`\n"
-                f"  Result: {feedback} ({sign}{reward:.2f})\n"
+                f"**Step {step} — `{tool}`** {icon}\n\n"
+                f"📄 Target: `{params}`  \n"
+                f"{'✅' if reward > 0 else '⚠️'} Result: {feedback}  \n"
+                f"📉 Reward: `{sign}{reward:.2f}`\n"
+                f"---"
             )
         return "\n".join(lines)
 
@@ -237,11 +239,11 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
             # ── LEFT: Control Panel ──────────────────────────────────────────
             with gr.Column(scale=1, min_width=240):
 
-                gr.Markdown("### 📊 System Status")
+                gr.Markdown("### 🖥️ System Status")
                 status_box   = gr.Markdown("**Status**: Active",      elem_classes=["hud-card"])
                 severity_box = gr.Markdown("**Severity**: 🟠 Medium", elem_classes=["hud-card-warn"])
                 steps_box    = gr.Markdown("**Steps Remaining**: 20", elem_classes=["hud-card"])
-                reward_box   = gr.Markdown("**Score**: 0.00",         elem_classes=["hud-card"])
+                reward_box   = gr.Markdown("### 📊 Score: `0.00`",  elem_classes=["hud-card"])
 
                 gr.Markdown("---")
                 gr.Markdown("### ⚙️ Scenario")
@@ -332,7 +334,7 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                         f"**Status**: {data.get('status', 'Active')}",
                         f"**Severity**: {build_severity(data)}",
                         f"**Steps Remaining**: {data.get('steps_remaining', 0)}",
-                        f"**Score**: {data.get('reward_signal', 0.0):.2f}",
+                        f"### 📊 Score: `{data.get('reward_signal', 0.0):.2f}`",
                         data.get("logs", ""),
                         data.get("code_snippet", ""),
                         data.get("incident_thread", ""),
