@@ -141,9 +141,11 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
     def build_summary(history, state_data):
         if not history:
             return "Investigation has not started."
-        root_cause  = "Not identified"
-        ioc         = "Not confirmed"
-        action_taken = "None"
+
+        root_cause   = None
+        ioc          = None
+        action_taken = None
+
         for h in history:
             if h.get("tool") == "inspect_file" and h.get("reward", 0) > 0:
                 root_cause = h.get("params", "Unknown")
@@ -151,19 +153,34 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                 ioc = h.get("params", "Unknown")
             if h.get("tool") == "apply_fix" and h.get("reward", 0) > 0:
                 action_taken = "Remediation applied"
+
         confidence = sum(h.get("confidence", 0) for h in history) / max(len(history), 1)
-        status = state_data.get("status", "Active") if state_data else "Active"
+        raw_status = state_data.get("status", "Active") if state_data else "Active"
+
+        # Dynamic status signal
+        if raw_status == "Mitigated":
+            status_display = "🟢 Mitigated"
+        elif root_cause or ioc:
+            status_display = "🟡 Threat Identified — Remediation Pending"
+        else:
+            status_display = "🔴 Threat Ongoing — Investigation Active"
+
+        # Pending fields feel system-tracked, not static placeholders
+        def fmt(val):
+            return f"`{val}`" if val else "⚠️ Pending"
+
         return (
-            f"### Investigation Summary\n"
+            f"### 🧾 Incident Report\n"
             f"| Field | Value |\n"
             f"|---|---|\n"
-            f"| **Status** | {status} |\n"
-            f"| **Root Cause** | `{root_cause}` |\n"
-            f"| **IOC** | `{ioc}` |\n"
-            f"| **Action Taken** | {action_taken} |\n"
+            f"| **Status** | {status_display} |\n"
+            f"| **Root Cause** | {fmt(root_cause)} |\n"
+            f"| **IOC** | {fmt(ioc)} |\n"
+            f"| **Action Taken** | {fmt(action_taken)} |\n"
             f"| **Confidence** | {confidence:.2f} |\n"
             f"| **Steps Used** | {len(history)} |"
         )
+
 
     def build_evaluation(score, history, max_steps):
         phases = {
