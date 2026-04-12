@@ -7,56 +7,45 @@ import base64
 import numpy as np
 
 CSS = """
-/* FORCE DARK NAVY THEME - GLOBAL VARIABLES */
-:root, .dark {
-    --body-background-fill: #040d1a !important;
-    --block-background-fill: #0a192f !important;
-    --block-border-color: #112240 !important;
-    --input-background-fill: #020c1b !important;
-    --button-primary-background-fill: #112240 !important;
-    --button-primary-text-color: #64ffda !important;
-    --border-color-primary: #112240 !important;
+/* UNIVERSAL NAVY HAMMER */
+:root, .dark, body, .gradio-container {
+    --body-background-fill: #020617 !important;
+    --block-background-fill: #0f172a !important;
+    --block-border-color: #1e293b !important;
+    --input-background-fill: #020617 !important;
+    --button-primary-background-fill: #22d3ee !important;
+    --button-primary-text-color: #020617 !important;
+    --button-primary-border-color: #22d3ee !important;
+    background-color: #020617 !important;
 }
 
-.gradio-container {
-    background-color: #040d1a !important;
-    color: #ccd6f6 !important;
+/* Card & HUD Refinement */
+.soc-card, .hud-card {
+    background: #0f172a !important;
+    border: 1px solid #1e293b !important;
+    border-radius: 12px !important;
 }
 
-/* Card Styling */
-.soc-card {
-    background: #0a192f !important;
-    border: 2px solid #112240 !important;
-    border-radius: 8px !important;
-    padding: 24px !important;
-    margin-bottom: 20px !important;
-}
+/* Typography */
+* { font-family: 'Courier New', Courier, monospace !important; }
 
-/* Header Styling */
-.soc-header {
-    background: #0a192f !important;
-    border: 1px solid #112240 !important;
-}
-
-/* Button Hammer */
-.primary-btn, button.primary {
-    background-color: #112240 !important;
-    color: #64ffda !important;
-    border: 2px solid #64ffda !important;
-    text-transform: uppercase !important;
-}
-
-/* Log Coloring */
-.logs-area pre, .logs-area code {
+/* Forensic Logs (Matrix Style) */
+.logs-area pre, .logs-area code, .logs-area .hljs {
+    background: #000 !important;
     color: #00ff9c !important;
-    background: #020c1b !important;
 }
 .logs-area .token.string, .logs-area .hljs-string {
     color: #ff4d4f !important;
 }
 
-/* General Monospace */
-* { font-family: 'Courier New', Courier, monospace !important; }
+/* Button & Accent Overrides */
+button.primary, .primary-btn {
+    background: #22d3ee !important;
+    color: #020617 !important;
+    border: none !important;
+    font-weight: bold !important;
+    box-shadow: 0 0 15px rgba(34,211,238,0.3) !important;
+}
 """
 
 JS_FORCE_DARK = """
@@ -265,9 +254,18 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
     with gr.Blocks(
         title="Sentinel-SOC | AI Security Analyst",
         css=CSS,
-        js=JS_FORCE_DARK,
-        theme=gr.themes.Default(primary_hue="blue", neutral_hue="slate")
+        theme=gr.themes.Soft(
+            primary_hue="cyan",
+            neutral_hue="slate",
+        ).set(
+            body_background_fill="#020617",
+            block_background_fill="#0f172a",
+            block_border_width="1px",
+            block_title_text_color="#22d3ee"
+        )
     ) as demo:
+        # Extra inline hammer for background
+        gr.HTML(f"<style>{CSS}</style>", visible=False)
 
         # ── SOC HEADER BAR ───────────────────────────────────────────────────
         with gr.Row(elem_classes=["soc-header"]):
