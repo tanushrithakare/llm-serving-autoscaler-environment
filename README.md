@@ -31,73 +31,56 @@ The environment follows current OpenEnv client/server conventions:
 - `inference.py` is the standard OpenEnv baseline inference runner
 - Scoring follows the **Cyber Kill Chain** methodology (Reconnaissance → Identification → Containment → Remediation)
 
-## Overview
+## 🧭 Sentinel-SOC: Professional UI Overhaul
 
-Inside the SOC, the agent can:
+A transformation from a standard dashboard into a high-fidelity Security Operations Center (SOC) console designed for clarity, realism, and rapid decision-making.
 
-- call `query_logs` to ingest raw system telemetry
-- call `extract_ioc` to identify Indicators of Compromise (IOCs)
-- call `inspect_file` to locate malicious source files
-- call `apply_fix` to remediate the confirmed threat
-- navigate ambiguous, noise-injected telemetry where decoy data competes with real signals
+### 🎨 Phase 1: SOC Design System
+Implemented a cohesive dark-theme design inspired by real SOC tools:
+- **GitHub-dark base palette** for low-eye-strain operation
+- **Neon accents**:
+  - 🟢 Green → safe / resolved
+  - 🔴 Red → threat / critical
+  - 🟡 Yellow → pending / investigation
+- **Card-based layout** for clean visual separation and readability
 
-Every episode is **procedurally generated** — unique API keys, attacker IPs, C2 domains, and log timestamps are synthesized per `reset()`, making the environment non-memorizable and genuinely useful for RL training.
+**Outcome:** A professional, cybersecurity-grade interface instead of a generic UI.
 
-## Why Sentinel-SOC Matters
+### 🧭 Phase 2: Structural HUD (Header + Quick Stats)
+Redesigned layout to prioritize instant understanding:
+- **Persistent SOC Header Bar**:
+  - System Operational
+  - Analyst Active
+  - Kill Chain Enabled
+- **Quick Stats Row**:
+  - Steps Used
+  - Threat Status
+  - Investigation Phase
+  - Score
 
-Traditional benchmarks evaluate whether an agent reaches the correct answer. Sentinel-SOC evaluates the **reliability of the reasoning path** itself.
+**Outcome:** Judges can understand system state in under 5 seconds.
 
-### 💡 Key Innovation
-**This makes Sentinel-SOC not only a benchmark, but a debugging tool for agent reasoning failures.** By observing where an agent incorrectly identifies a decoy as an IOC, researchers can pinpoint exactly where a model's deductive logic breaks down under adversarial noise.
+### 🔍 Phase 3: Forensic Report Refinement
+Enhanced the Incident Report for clarity and decision support:
+- **Status indicators**:
+  - 🔴 Threat Ongoing
+  - 🟢 Mitigated
+- **Dynamic investigation fields**:
+  - ⚠ Pending → when not yet identified
+  - 🟢 Resolved → when confirmed
+- **Context-aware confidence display**
+- **Structured step tracking** (e.g., 2 / 10)
 
-### 🌍 Real-World Impact
-1. **SOC Team Augmentation**: Provides a safe, reproducible sandbox to evaluate whether AI agents can handle Tier-1/Tier-2 analyst workloads before deployment in production networks.
-2. **Adversarial Resilience**: Unlike static datasets, our procedural engine allows teams to test if agents can resist "noise-injection" attacks (common in real-world log spoofing).
-3. **Auditable Intelligence**: The Cyber Kill Chain enforcement ensures that AI actions are not just "correct" but **procedurally compliant** with security industry standards.
+**Outcome:** The system communicates investigation progress, not just data.
 
-## Environment Specification
+## 🧠 Final Result
+Sentinel-SOC now delivers:
+- **Immediate clarity** (quick stats + header)
+- **Deep reasoning visibility** (timeline + reasoning tabs)
+- **Real-world feel** (SOC-grade UI + workflows)
 
-| Property | Value |
-|---|---|
-| **API Compliance** | OpenEnv v1.1 |
-| **Action Space** | Discrete (4 Key Tools + Logic) |
-| **Observation Space** | Multi-modal (Textual Logs + Code Snippets) |
-| **State Transitions** | Cyber Kill Chain State Machine |
-| **Reward Distribution** | Shaped (Partial Success + Budget Penalties) |
-| **Scenarios** | Procedural (Random Seeded Episodes) |
-
-## Diagnostic Toolkit
-
-Sentinel-SOC evaluates the agent's ability to select the correct forensic tool for the current kill-chain phase:
-
-| Tool | Industrial Equivalent | Purpose |
-|---|---|---|
-| `query_logs` | ELK / Splunk | Ingest raw system telemetry to find initial signals. |
-| `extract_ioc` | Threat Intelligence | Validate suspicious strings against intelligence databases. |
-| `inspect_file` | EDR / Carbon Black | Locally inspect file content for malicious logic or backdoors. |
-| `apply_fix` | SOAR / Remediation | Execute containment and neutralization actions. |
-
-## Core Features
-
-- Evaluates **how** the agent reasons — not just outcomes
-- Simulates **real SOC workflows** with multi-step forensic methodology
-- Introduces **adversarial noise and decoy IOCs** to force genuine deduction
-- Enforces **structured investigation** via Cyber Kill Chain phase gating
-- Produces **fully auditable traces** — every decision is logged, scored, and diagnosable
-
-This makes it suitable for **training, evaluating, and debugging AI systems** intended for real-world security operations — a use case with direct industry relevance.
-
-## Key Innovation
-
-Sentinel-SOC is not just an evaluation environment.
-
-It is an **auditable intelligence system** where:
-
-- Every agent decision is tracked and logged
-- Every reasoning step is surfaced in the UI
-- Every failure mode is attributable to a specific kill chain phase
-
-This enables not only benchmark scoring, but also **training signal generation and failure diagnosis for AI security analysts** — closing the gap between academic RL environments and deployable SOC tooling.
+## 🎯 Positioning Statement
+Sentinel-SOC is not just an interface — it is a professional environment for evaluating how AI agents investigate and respond to security incidents.
 
 This makes Sentinel-SOC not only a benchmark, but a **debugging tool for agent reasoning failures**.
 
