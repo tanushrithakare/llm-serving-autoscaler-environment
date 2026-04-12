@@ -74,4 +74,4 @@ The environment currently supports three distinct scenarios:
    ```
 
 ---
-*Developed for the Meta PyTorch Hackathon (OpenEnv).*
+*Developed for the Meta PyTorch Hackathon 2026 (OpenEnv).*

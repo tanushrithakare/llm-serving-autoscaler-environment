@@ -39,17 +39,38 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
         with gr.Row():
             with gr.Column(scale=1):
                 gr.Markdown("### 📊 INCIDENT HUD")
-                status_box = gr.Markdown("STAUTS: **ACTIVE**", elem_classes=["hud-card", "status-active"])
-                reward_box = gr.Markdown("EFFICIENCY: **0.00**", elem_classes=["hud-card"])
-                steps_box = gr.Markdown("TTL: **10**", elem_classes=["hud-card"])
+                status_box = gr.Markdown("STATUS: **Active**", elem_classes=["hud-card", "status-active"])
+                reward_box = gr.Markdown("EFFICIENCY: **0.0**", elem_classes=["hud-card"])
+                steps_box = gr.Markdown("TTL: **20**", elem_classes=["hud-card"])
                 
-                gr.Markdown("### 🛠️ OPERATIONS")
+                gr.Markdown("### ⚙️ SCENARIO")
                 task_dropdown = gr.Radio(
                     choices=["easy", "medium", "hard"], 
                     value="easy", 
                     label="Deployment Scenario"
                 )
                 reset_btn = gr.Button("🔄 INITIALIZE ENVIRONMENT", variant="primary")
+
+                gr.Markdown("---")
+                gr.Markdown("### 🔧 EXECUTE TOOL")
+                tool_dropdown = gr.Dropdown(
+                    choices=["query_logs", "inspect_file", "decode_payload", "remediate"],
+                    value="query_logs",
+                    label="Forensic Tool"
+                )
+                params_input = gr.Textbox(
+                    label="Parameters",
+                    placeholder="e.g. access.log, config.py, base64string...",
+                    lines=1
+                )
+                reasoning_input = gr.Textbox(
+                    label="Analyst Reasoning",
+                    placeholder="Why are you running this tool?",
+                    lines=2
+                )
+                step_btn = gr.Button("▶️ EXECUTE STEP", variant="secondary")
+                grade_btn = gr.Button("📋 GRADE INVESTIGATION", variant="stop")
+                grade_output = gr.Markdown("", elem_classes=["hud-card"])
             
             with gr.Column(scale=3):
                 gr.Markdown("### 🔬 FORENSIC DATA")
@@ -63,6 +84,7 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
         
         with gr.Row():
             gr.Markdown("### 📜 INVESTIGATION TIMELINE")
+        with gr.Row():
             history_table = gr.Dataframe(
                 headers=["Step", "Tool", "Parameters", "Feedback", "Confidence"],
                 datatype=["number", "str", "str", "str", "number"],
@@ -70,51 +92,82 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                 interactive=False
             )
 
+        # --- Helper to read current state and history ---
         def update_state():
             try:
-                with httpx.Client() as client:
+                with httpx.Client(timeout=15) as client:
                     resp = client.get(f"{server_url}/state")
                     if resp.status_code == 200:
                         data = resp.json()
                         history_resp = client.get(f"{server_url}/history")
                         history_data = history_resp.json().get("history", [])
                         
-                        # Format history for dataframe
                         df_data = []
-                        for h in history_data:
+                        for i, h in enumerate(history_data):
                             df_data.append([
-                                h.get("step"),
-                                h.get("tool"),
-                                h.get("params"),
-                                h.get("feedback"),
-                                h.get("confidence")
+                                i + 1,
+                                h.get("tool", ""),
+                                h.get("params", ""),
+                                h.get("feedback", ""),
+                                h.get("confidence", 0)
                             ])
                             
                         return [
                             f"STATUS: **{data.get('status')}**",
-                            f"EFFICIENCY: **{data.get('reward_signal')}**",
-                            f"TTL: **{data.get('steps_remaining')}**",
-                            data.get("logs"),
-                            data.get("code_snippet"),
-                            data.get("incident_thread"),
+                            f"EFFICIENCY: **{data.get('reward_signal', 0.0):.2f}**",
+                            f"TTL: **{data.get('steps_remaining', 0)}**",
+                            data.get("logs", ""),
+                            data.get("code_snippet", ""),
+                            data.get("incident_thread", ""),
                             df_data
                         ]
             except Exception as e:
                 return [f"ERR: {str(e)}"] * 7
             return ["No data"] * 7
 
+        # --- Reset handler ---
         def on_reset(task):
             try:
-                with httpx.Client() as client:
+                with httpx.Client(timeout=15) as client:
                     client.post(f"{server_url}/reset", params={"task": task})
                 return update_state()
             except Exception as e:
                 return [f"ERR: {str(e)}"] * 7
 
-        # Event handlers
-        reset_btn.click(on_reset, inputs=[task_dropdown], outputs=[status_box, reward_box, steps_box, logs_output, code_output, thread_output, history_table])
+        # --- Step handler ---
+        def on_step(tool, params, reasoning):
+            try:
+                action = {
+                    "reasoning": reasoning or f"Executing {tool}",
+                    "tool": tool,
+                    "parameters": params or ""
+                }
+                with httpx.Client(timeout=15) as client:
+                    client.post(f"{server_url}/step", json=action)
+                return update_state()
+            except Exception as e:
+                return [f"ERR: {str(e)}"] * 7
+
+        # --- Grade handler ---
+        def on_grade():
+            try:
+                with httpx.Client(timeout=15) as client:
+                    resp = client.post(f"{server_url}/grade")
+                    if resp.status_code == 200:
+                        score = resp.json().get("score", 0)
+                        return f"### 🏆 Final Score: **{score:.2f}**"
+            except Exception as e:
+                return f"ERR: {str(e)}"
+            return "No score available"
+
+        # --- Wire up event handlers ---
+        all_outputs = [status_box, reward_box, steps_box, logs_output, code_output, thread_output, history_table]
         
-        # Load initial state
-        demo.load(update_state, outputs=[status_box, reward_box, steps_box, logs_output, code_output, thread_output, history_table])
+        reset_btn.click(on_reset, inputs=[task_dropdown], outputs=all_outputs)
+        step_btn.click(on_step, inputs=[tool_dropdown, params_input, reasoning_input], outputs=all_outputs)
+        grade_btn.click(on_grade, outputs=[grade_output])
+        
+        # Load initial state on page open
+        demo.load(update_state, outputs=all_outputs)
         
     return demo
