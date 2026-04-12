@@ -305,8 +305,16 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
         return None
 
     # ── Build UI ─────────────────────────────────────────────────────────────
-    with gr.Blocks(title="Sentinel-SOC | AI Security Analyst") as demo:
-        # Note: theme and css are now handled at launch/mount in Gradio 6
+    with gr.Blocks(
+        title="Sentinel-SOC | AI Security Analyst",
+        css=CSS,
+        theme=gr.themes.Default(primary_hue="blue", neutral_hue="slate").set(
+            body_background_fill="#040d1a",
+            block_background_fill="#0a192f",
+            block_border_width="1px",
+            block_title_text_color="#64ffda"
+        )
+    ) as demo:
 
         # ── SOC HEADER BAR ───────────────────────────────────────────────────
         with gr.Row(elem_classes=["soc-header"]):
