@@ -208,7 +208,59 @@ Hard tier introduces multiple suspicious—but incorrect—domains and IPs along
 
 Single-step heuristics and pattern-matching fail in this scenario. The agent must perform genuine multi-source deductive reasoning.
 
+## 🔍 IOC Extraction Design
+
+Sentinel-SOC evaluates whether an AI agent can identify the correct **Indicator of Compromise (IOC)** among realistic noise and decoys. Each task introduces ambiguity that requires contextual reasoning — not pattern matching.
+
+### 🟢 Easy — Credential Leak
+
+Logs contain both a real production key and a decoy test key:
+
+```
+sk_live_...   ← real credential (production exposure)
+sk_test_...   ← decoy (development key, harmless)
+```
+
+The agent must **distinguish production vs test credentials** and select only the sensitive one.
+
+### 🟡 Medium — SQL Injection
+
+Multiple external IPs appear in access logs — only one is associated with a SQL injection payload:
+
+```
+94.103.42.17  → GET /user?id=1' UNION SELECT password_hash FROM credentials --   ← target
+45.227.18.203 → POST /api/login   (401 failed auth — suspicious but not the source)
+```
+
+The agent must **analyze query behavior** and correlate attack patterns with the correct attacker IP.
+
+### 🔴 Hard — Backdoor Detection
+
+The malicious C2 domain appears in two places simultaneously:
+
+```
+# In network logs:
+NETWORK: 172.16.x.x → malware-cdn.xyz:443  (UNAUTHORIZED)     ← target
+NETWORK: 172.16.x.x → attacker-domain.io:8080  (BLOCKED)      ← decoy
+
+# In source code (Base64-obfuscated):
+beacon_url = base64.b64decode("bWFsd2FyZS1jZG4ueHl6").decode()  ← encoded target
+```
+
+The agent must **decode the obfuscated payload**, correlate it with network activity, and distinguish the true C2 endpoint from decoys that appear in both logs and source code.
+
+### 🧠 Why This Is Challenging
+
+- Multiple valid-looking candidates appear (decoys intentionally resemble real IOCs)
+- Correct identification requires **cross-source reasoning** (logs + code)
+- Cannot be solved by single-step extraction or pattern matching alone
+
+### 🎯 Evaluation Objective
+
+The agent is not rewarded for extraction alone, but for **selecting the correct IOC based on contextual understanding** within a structured investigation workflow. Wrong selections are penalized.
+
 ## Actions and Observations
+
 
 ### `IncidentAction`
 
