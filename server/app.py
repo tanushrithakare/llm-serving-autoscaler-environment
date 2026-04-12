@@ -27,12 +27,6 @@ def get_env(task: str = "leak-investigation"):
     return _env_instance
 
 
-@app.get("/")
-def root():
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/ui")
-
-
 @app.get("/health")
 def health():
     return {"status": "healthy", "service": "sentinel-soc"}
@@ -74,9 +68,14 @@ def get_history():
     env = get_env()
     return {"history": env.history}
 
-# Mount Gradio UI
-ui_app = create_gradio_ui()
-app = gr.mount_gradio_app(app, ui_app, path="/ui")
+# --- Gradio UI Integration ---
+# Calculate the correct SERVER_URL for HF Spaces (HTTPS support)
+SERVER_URL = os.getenv("SPACE_HOST", "http://localhost:7860")
+if not SERVER_URL.startswith("http"):
+    SERVER_URL = "https://" + SERVER_URL
+
+ui_app = create_gradio_ui(server_url=SERVER_URL)
+app = gr.mount_gradio_app(app, ui_app, path="/")
 
 def main():
     import uvicorn
@@ -84,10 +83,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-import gradio as gr
-from server.gradio_ui import create_gradio_ui
-
-# Mount Gradio UI at root
-ui = create_gradio_ui(server_url="http://localhost:7860")
-app = gr.mount_gradio_app(app, ui, path="/")    
-
