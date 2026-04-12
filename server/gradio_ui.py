@@ -256,25 +256,25 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
 
                 gr.Markdown("---")
                 gr.Markdown("### 🤖 Agent Action Console")
-                gr.Markdown(
-                    "<small style='color:#999;'>Simulate how an AI security analyst "
-                    "selects tools and investigates artifacts step-by-step.</small>",
-                    sanitize_html=False
+                gr.HTML(
+                    '<p style="font-size:0.76em; color:#999; margin:0 0 8px 0;">'
+                    'Simulate how an AI security analyst selects tools and investigates artifacts step-by-step.'
+                    '</p>'
                 )
                 tool_dropdown = gr.Dropdown(
                     choices=["query_logs", "extract_ioc", "inspect_file", "apply_fix"],
                     value="query_logs",
                     label="Action"
                 )
-                params_input = gr.Textbox(
-                    label="Target / Value",
-                    placeholder="e.g. all  |  sk_live_...  |  app.log  |  remediate",
-                    lines=1
+                params_input = gr.Dropdown(
+                    choices=["all", "auth.log", "access.log", "error.log", "system.log"],
+                    value="all",
+                    label="Target",
+                    allow_custom_value=True
                 )
                 gr.HTML(
-                    '<p style="font-size:0.74em; color:#888; margin:-4px 0 8px 0;">'
-                    '📂 Common targets: <code>all</code> · <code>app.log</code> · '
-                    '<code>config.py</code> · <code>vendor/auth_lib.py</code> · <code>remediate</code>'
+                    '<p style="font-size:0.72em; color:#777; margin:-4px 0 8px 0;">'
+                    '🖥️ Targets sourced from current system state and telemetry'
                     '</p>'
                 )
                 reasoning_input = gr.Textbox(
@@ -401,9 +401,24 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
             eval_output, explain_output,
         ]
 
-        reset_btn.click(on_reset, inputs=[task_dropdown],                              outputs=all_outputs)
-        step_btn.click( on_step,  inputs=[tool_dropdown, params_input, reasoning_input], outputs=all_outputs)
-        grade_btn.click(on_grade,                                                      outputs=[eval_output])
-        demo.load(fetch_full_state,                                                    outputs=all_outputs)
+        reset_btn.click(on_reset, inputs=[task_dropdown],                               outputs=all_outputs)
+        step_btn.click( on_step,  inputs=[tool_dropdown, params_input, reasoning_input],  outputs=all_outputs)
+        grade_btn.click(on_grade,                                                       outputs=[eval_output])
+        demo.load(fetch_full_state,                                                     outputs=all_outputs)
+
+        # ── Dynamic target list per tool ──────────────────────────────────────
+        TOOL_TARGETS = {
+            "query_logs":   ["all", "auth.log", "access.log", "error.log", "system.log"],
+            "extract_ioc":  [],   # IOC is episode-specific — paste from telemetry above
+            "inspect_file": ["app.log", "config.py", "vendor/auth_lib.py",
+                             "requirements.txt", "index.html", "auth_service.py"],
+            "apply_fix":    ["remediate"],
+        }
+        def update_targets(tool):
+            targets = TOOL_TARGETS.get(tool, [])
+            first   = targets[0] if targets else ""
+            return gr.Dropdown(choices=targets, value=first, allow_custom_value=True)
+
+        tool_dropdown.change(update_targets, inputs=[tool_dropdown], outputs=[params_input])
 
     return demo
