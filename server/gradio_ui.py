@@ -9,9 +9,13 @@ import numpy as np
 CSS = """
 .gradio-container {
     font-family: 'Segoe UI', 'Inter', system-ui, sans-serif !important;
-    max-width: 1400px !important;
-    background-color: #1a1a1a !important;
+    max-width: 1200px !important;
+    margin: 0 auto !important;
+    padding: 20px !important;
 }
+
+/* Hard-coded Dark Body - for safety */
+body { background-color: #111 !important; color: #eee !important; }
 
 /* Terminal-style code blocks */
 .code-wrap textarea, .code-wrap code {
@@ -20,41 +24,41 @@ CSS = """
     line-height: 1.5 !important;
 }
 
-/* HUD Card - Premium Dashboard Style */
+/* HUB Card - Compact Version */
 .hud-card {
-    background: #2a2a2a;
-    border: 1px solid #444;
+    background: #222 !important;
+    border: 1px solid #444 !important;
     border-radius: 8px;
-    padding: 12px 16px;
-    margin: 5px;
-    color: #e8e8e8;
+    padding: 8px 12px;
+    margin: 4px;
+    color: #eee !important;
     text-align: center;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
 }
 
-.hud-card-success { border-color: #22c55e !important; color: #4ade80 !important; }
-.hud-card-danger { border-color: #ef4444 !important; color: #f87171 !important; }
-.hud-card-warn { border-color: #f59e0b !important; color: #fbbf24 !important; }
-.hud-card-info { border-color: #3b82f6 !important; color: #60a5fa !important; }
+.hud-card-success { border-color: #22c55e !important; color: #4ade80 !important; box-shadow: 0 0 10px rgba(34,197,94,0.2) !important; }
+.hud-card-danger { border-color: #ef4444 !important; color: #f87171 !important; box-shadow: 0 0 10px rgba(239,68,68,0.2) !important; }
+.hud-card-warn { border-color: #f59e0b !important; color: #fbbf24 !important; box-shadow: 0 0 10px rgba(245,158,11,0.2) !important; }
+.hud-card-info { border-color: #3b82f6 !important; color: #60a5fa !important; box-shadow: 0 0 10px rgba(59,130,246,0.2) !important; }
 
 /* Alert banner */
 .alert-banner {
     background: #2e1515;
     border-left: 4px solid #ef4444;
     border-radius: 4px;
-    padding: 10px 16px;
-    margin-bottom: 10px;
+    padding: 8px 12px;
+    margin: 5px 0 15px 0;
     color: #fca5a5;
-    font-size: 0.95em;
+    font-size: 0.9em;
     font-weight: 500;
 }
 
 /* Action Workbench styling */
 .workbench-group {
-    background: #242424 !important;
+    background: #1a1a1a !important;
     border: 1px solid #333 !important;
     border-radius: 10px !important;
-    padding: 20px !important;
+    padding: 15px !important;
 }
 
 .primary-btn {
@@ -268,7 +272,12 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
     with gr.Blocks(
         title="Sentinel-SOC | AI Security Analyst",
         css=CSS,
-        theme=gr.themes.Default(primary_hue="blue", neutral_hue="slate")
+        theme=gr.themes.Default(primary_hue="blue", neutral_hue="slate").set(
+            body_background_fill="#111",
+            block_background_fill="#1a1a1a",
+            block_border_width="1px",
+            block_title_text_color="#eee"
+        )
     ) as demo:
 
         # ── HEADER ───────────────────────────────────────────────────────────
@@ -290,10 +299,16 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
 
         # ── HUD (Top Hero Metrics Row) ───────────────────────────────────────
         with gr.Row():
-            status_box   = gr.Markdown("**STATUS**\n\n### ACTIVE", elem_classes=["hud-card", "hud-card-info"])
-            severity_box = gr.Markdown("**SEVERITY**\n\n### MEDIUM", elem_classes=["hud-card", "hud-card-warn"])
-            steps_box    = gr.Markdown("**PROGRESS**\n\n### 0 / 20", elem_classes=["hud-card"])
-            score_box    = gr.Markdown("**CURRENT SCORE**\n\n### 0.00", elem_classes=["hud-card", "hud-card-success"])
+            gr.Column(scale=1) # Spacer
+            with gr.Column(scale=2, min_width=150):
+                status_box   = gr.HTML(label="Status")
+            with gr.Column(scale=2, min_width=150):
+                severity_box = gr.HTML(label="Severity")
+            with gr.Column(scale=2, min_width=150):
+                steps_box    = gr.HTML(label="Progress")
+            with gr.Column(scale=2, min_width=150):
+                score_box    = gr.HTML(label="Score")
+            gr.Column(scale=1) # Spacer
 
         gr.Markdown("---")
 
@@ -369,26 +384,51 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                         explain_output = gr.Markdown("Explain the incident in plain English.")
 
         # ── STATE LOGIC ──────────────────────────────────────────────────────
+        def fmt_hud(label, value, status="neutral"):
+            """Helper to generate premium HTML HUD cards with dynamic colors."""
+            class_map = {
+                "success": "hud-card-success",
+                "danger": "hud-card-danger",
+                "warn": "hud-card-warn",
+                "info": "hud-card-info",
+                "neutral": "hud-card"
+            }
+            cls = class_map.get(status, "hud-card")
+            return f'<div class="hud-card {cls}"><p style="margin:0; font-size:0.8em; opacity:0.8; font-weight:600;">{label}</p><h3 style="margin:5px 0 0 0; font-size:1.6em;">{value}</h3></div>'
+
         def fetch_full_state():
             try:
                 with httpx.Client(timeout=15) as client:
                     resp = client.get(f"{server_url}/state")
                     if resp.status_code != 200:
-                        return ["ERR"] * 12
+                        return ["ERR"] * 11
                     data = resp.json()
                     history_resp = client.get(f"{server_url}/history")
                     history_data = history_resp.json().get("history", [])
                     max_steps = data.get("steps_remaining", 0) + len(history_data)
                     
-                    # Update HUD Cards
+                    # 1. Status Card (Grey by default, Green on Success)
                     curr_status = data.get('status', 'Active')
-                    status_class = "hud-card-info" if curr_status == "Active" else "hud-card-success"
+                    stat_cls = "success" if curr_status == "Mitigated" else "neutral"
+                    status_html = fmt_hud("SYSTEM STATUS", curr_status.upper(), stat_cls)
+                    
+                    # 2. Severity Card (Grey baseline, Red for Critical, Yellow for High)
+                    sev_text = build_severity(data).split(' ')[1].upper()
+                    sev_cls = "danger" if sev_text == "CRITICAL" else ("warn" if sev_text == "HIGH" else "neutral")
+                    severity_html = fmt_hud("THREAT LEVEL", sev_text, sev_cls)
+                    
+                    # 3. Progress Card (Clean Neutral Grey)
+                    progress_html = fmt_hud("INVESTIGATION PROGRESS", f"{len(history_data)} / {max_steps}", "neutral")
+                    
+                    # 4. Score Card (Info Blue)
+                    score_val = data.get('reward_signal', 0.0)
+                    score_html = fmt_hud("EFFICIENCY SCORE", f"{score_val:.2f}", "info")
                     
                     return [
-                        f"**STATUS**\n\n### {curr_status.upper()}",
-                        f"**SEVERITY**\n\n### {build_severity(data).split(' ')[1].upper()}",
-                        f"**PROGRESS**\n\n### {len(history_data)} / {max_steps}",
-                        f"**SCORE**\n\n### {data.get('reward_signal', 0.0):.2f}",
+                        status_html,
+                        severity_html,
+                        progress_html,
+                        score_html,
                         data.get("logs", ""),
                         data.get("code_snippet", ""),
                         build_timeline(history_data),
@@ -398,7 +438,7 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                         build_explanation(history_data, data),
                     ]
             except Exception as e:
-                return [f"ERR: {str(e)}"] * 12
+                return [f"ERR: {str(e)}"] * 11
 
         def on_reset(task):
             try:
@@ -406,7 +446,7 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                     client.post(f"{server_url}/reset", params={"task": task})
                 return fetch_full_state()
             except Exception:
-                return ["ERR"] * 12
+                return ["ERR"] * 11
 
         def on_step(tool, params, reasoning):
             try:
@@ -415,7 +455,7 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                     client.post(f"{server_url}/step", json=action)
                 return fetch_full_state()
             except Exception:
-                return ["ERR"] * 12
+                return ["ERR"] * 11
 
         def on_grade():
             try:
