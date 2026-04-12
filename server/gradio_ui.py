@@ -14,39 +14,47 @@ CSS = """
     font-size: 0.82em !important;
     line-height: 1.5 !important;
 }
+
+/* Base status card — charcoal, not black */
 .hud-card {
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-    border: 1px solid #0f3460;
+    background: #2c2c2c;
+    border: 1px solid #444;
     border-radius: 6px;
     padding: 10px 14px;
     margin-bottom: 6px;
-    color: #e0e0e0;
+    color: #e8e8e8;
     font-size: 0.92em;
 }
+
+/* Success — green accent only on border + text, not full green background */
 .hud-card-success {
-    background: linear-gradient(135deg, #0d2818 0%, #1a4731 100%);
-    border: 1px solid #2d6a4f;
-    color: #95d5b2;
-}
-.hud-card-danger {
-    background: linear-gradient(135deg, #2d0a0a 0%, #4a1212 100%);
-    border: 1px solid #9b2226;
-    color: #f4a0a0;
-}
-.hud-card-warn {
-    background: linear-gradient(135deg, #2d1f00 0%, #4a3500 100%);
-    border: 1px solid #e09f3e;
-    color: #ffd166;
+    background: #2a2a2a;
+    border: 1px solid #3a7d44;
+    color: #7dcf8e;
 }
 
-/* Banner */
+/* Danger — muted red tint, not saturated */
+.hud-card-danger {
+    background: #2e2020;
+    border: 1px solid #7a2a2a;
+    color: #f2a0a0;
+}
+
+/* Warning — muted amber tint */
+.hud-card-warn {
+    background: #2c2616;
+    border: 1px solid #8a6a20;
+    color: #e0b84a;
+}
+
+/* Alert banner — dark charcoal-red, not pure black */
 .alert-banner {
-    background: linear-gradient(90deg, #3d0000 0%, #1a0000 100%);
-    border-left: 4px solid #ff4444;
+    background: #2e1515;
+    border-left: 4px solid #cc3333;
     border-radius: 4px;
     padding: 10px 16px;
-    margin-bottom: 12px;
-    color: #ffcccc;
+    margin-bottom: 10px;
+    color: #f0c0c0;
     font-size: 0.95em;
     letter-spacing: 0.02em;
 }
