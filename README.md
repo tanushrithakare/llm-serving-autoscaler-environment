@@ -45,9 +45,17 @@ Every episode is **procedurally generated** — unique API keys, attacker IPs, C
 
 ## Why Sentinel-SOC Matters
 
-Traditional benchmarks evaluate whether an agent reaches the correct answer.
+Traditional benchmarks evaluate whether an agent reaches the correct answer. Sentinel-SOC evaluates the **reliability of the reasoning path** itself.
 
-Sentinel-SOC goes further:
+### 💡 Key Innovation
+**This makes Sentinel-SOC not only a benchmark, but a debugging tool for agent reasoning failures.** By observing where an agent incorrectly identifies a decoy as an IOC, researchers can pinpoint exactly where a model's deductive logic breaks down under adversarial noise.
+
+### 🌍 Real-World Impact
+1. **SOC Team Augmentation**: Provides a safe, reproducible sandbox to evaluate whether AI agents can handle Tier-1/Tier-2 analyst workloads before deployment in production networks.
+2. **Adversarial Resilience**: Unlike static datasets, our procedural engine allows teams to test if agents can resist "noise-injection" attacks (common in real-world log spoofing).
+3. **Auditable Intelligence**: The Cyber Kill Chain enforcement ensures that AI actions are not just "correct" but **procedurally compliant** with security industry standards.
+
+## Core Features
 
 - Evaluates **how** the agent reasons — not just outcomes
 - Simulates **real SOC workflows** with multi-step forensic methodology
