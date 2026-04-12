@@ -8,30 +8,30 @@ import numpy as np
 
 CSS = """
 .gradio-container {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif !important;
+    font-family: 'Courier New', Courier, monospace !important;
     max-width: 1000px !important;
     margin: 0 auto !important;
     padding: 30px 10px !important;
-    background-color: #0d0d0d !important;
+    background-color: #040d1a !important; /* Midnight Navy */
 }
 
-body { background-color: #0d0d0d !important; color: #e0e0e0 !important; }
+body { background-color: #040d1a !important; color: #e0f0ff !important; }
 
-/* SOC-Grade Cards - NEUTRAL GREY */
+/* SOC-Grade Cards - DEEP NAVY */
 .soc-card {
-    background: #1c1c1c !important;
-    border: 1px solid #444 !important;
+    background: #0a192f !important;
+    border: 1px solid #112240 !important;
     border-radius: 8px !important;
     padding: 24px !important;
     margin-bottom: 20px !important;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.6) !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.8) !important;
     min-height: 100px;
 }
 
-/* SOC Header Bar - Deep Grey */
+/* SOC Header Bar - Deep Navy */
 .soc-header {
-    background: #1c1c1c;
-    border: 1px solid #444;
+    background: #0a192f;
+    border: 1px solid #112240;
     border-radius: 6px;
     padding: 20px 30px;
     margin-bottom: 30px;
@@ -48,59 +48,64 @@ body { background-color: #0d0d0d !important; color: #e0e0e0 !important; }
 .dot-active { background-color: #3b82f6; box-shadow: 0 0 10px #3b82f6; }
 .dot-shield { background-color: #777; box-shadow: 0 0 5px #777; }
 
-/* HUD Quick Stats - Grey Baseline */
+/* HUD Quick Stats - Blue Baseline */
 .hud-card {
-    background: #1c1c1c !important;
-    border: 1px solid #444 !important;
+    background: #0a192f !important;
+    border: 1px solid #112240 !important;
     border-radius: 8px;
     padding: 15px;
     text-align: center;
     min-height: 100px;
 }
-.hud-card p { margin: 0; color: #888; font-size: 0.85em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-.hud-card h3 { margin: 10px 0 0 0; font-size: 1.8em; font-weight: 700; color: #eee; }
+.hud-card p { margin: 0; color: #64ffda; font-size: 0.85em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; }
+.hud-card h3 { margin: 10px 0 0 0; font-size: 1.8em; font-weight: 700; color: #ccd6f6; }
 
-.hud-green h3 { color: #00ff9c !important; text-shadow: 0 0 10px rgba(0,255,156,0.2); }
-.hud-red h3 { color: #ff4d4f !important; text-shadow: 0 0 10px rgba(255,77,79,0.2); }
-.hud-yellow h3 { color: #facc15 !important; text-shadow: 0 0 10px rgba(250,204,21,0.2); }
-.hud-blue h3 { color: #00f2ff !important; text-shadow: 0 0 10px rgba(0,242,255,0.2); }
+.hud-green h3 { color: #00ff9c !important; text-shadow: 0 0 10px rgba(0,255,156,0.3); }
+.hud-red h3 { color: #ff4d4f !important; text-shadow: 0 0 10px rgba(255,77,79,0.3); }
+.hud-yellow h3 { color: #facc15 !important; text-shadow: 0 0 10px rgba(250,204,21,0.3); }
+.hud-blue h3 { color: #00f2ff !important; text-shadow: 0 0 10px rgba(0,242,255,0.3); }
 
-/* Tab styling - Grey Base */
-.tabs > .tab-nav { border-bottom: 1px solid #444 !important; gap: 20px !important; margin-bottom: 15px !important; }
-.tabs > .tab-nav button { color: #888 !important; font-weight: 600 !important; font-size: 0.9em !important; }
-.tabs > .tab-nav button.selected { border-bottom: 2px solid #00f2ff !important; color: #00f2ff !important; background: transparent !important; }
+/* Tab styling - Navy Base */
+.tabs > .tab-nav { border-bottom: 1px solid #112240 !important; gap: 20px !important; margin-bottom: 15px !important; }
+.tabs > .tab-nav button { color: #8892b0 !important; font-weight: 600 !important; font-size: 0.9em !important; }
+.tabs > .tab-nav button.selected { border-bottom: 2px solid #64ffda !important; color: #64ffda !important; background: transparent !important; }
 
-/* Buttons - High Contrast Grey & Neon */
+/* Buttons - High Contrast Navy & Cyan */
 .primary-btn {
-    background: #252525 !important;
-    color: #00f2ff !important;
+    background: #112240 !important;
+    color: #64ffda !important;
     font-weight: 700 !important;
-    border: 1px solid #00f2ff !important;
+    border: 1px solid #64ffda !important;
     text-transform: uppercase;
     letter-spacing: 1px;
     padding: 12px !important;
 }
-.primary-btn:hover { background: #00f2ff !important; color: #000 !important; box-shadow: 0 0 15px rgba(0,242,255,0.4); }
+.primary-btn:hover { background: #64ffda !important; color: #0a192f !important; box-shadow: 0 0 20px rgba(100,255,218,0.4); }
 
 .stop-btn {
-    background: #1c1c1c !important;
+    background: #0a192f !important;
     color: #ff4d4f !important;
     border: 1px solid #ff4d4f !important;
 }
 .stop-btn:hover { background: #ff4d4f !important; color: #fff !important; }
 
 .secondary-btn {
-    background: #252525 !important;
-    color: #888 !important;
-    border: 1px solid #444 !important;
+    background: #112240 !important;
+    color: #8892b0 !important;
+    border: 1px solid #233554 !important;
 }
 
+/* Forensic Logs - Green/Red styling for Code items */
+.logs-area pre { color: #00ff9c !important; background: #020c1b !important; }
+.logs-area .token.string { color: #ff4d4f !important; }
+.logs-area .token.comment { color: #8892b0 !important; }
+
 /* Code and Input styles */
-.code-wrap { border: 1px solid #444 !important; border-radius: 6px !important; padding: 5px !important; }
+.code-wrap { border: 1px solid #112240 !important; border-radius: 6px !important; padding: 5px !important; background: #020c1b !important; }
 textarea, input, select {
-    background-color: #111 !important;
-    border: 1px solid #444 !important;
-    color: #f0f0f0 !important;
+    background-color: #020c1b !important;
+    border: 1px solid #112240 !important;
+    color: #ccd6f6 !important;
     margin-bottom: 10px !important;
 }
 """
@@ -364,7 +369,7 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                         eval_output = gr.Markdown(elem_classes=["soc-card"])
 
                     with gr.TabItem("🔍 FORENSIC DATA"):
-                        logs_output = gr.Code(label="System Telemetry", language="shell", lines=15, interactive=False)
+                        logs_output = gr.Code(label="System Telemetry", language="shell", lines=15, interactive=False, elem_classes=["logs-area"])
                         code_output = gr.Code(label="Source Investigation", language="python", lines=12, interactive=False)
 
                     with gr.TabItem("📜 ANALYSIS TRACE"):
