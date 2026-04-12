@@ -51,10 +51,48 @@ Agents receive an `IncidentObs` model after every step:
 - **Wrong action penalty**: -0.10 to -0.20 for acting on decoy data
 
 ## Tasks
-The environment currently supports three distinct scenarios:
+The environment supports three procedurally-generated scenarios. **Every `reset()` produces a unique incident** with randomized IPs, keys, domains, and filenames to prevent agent memorization.
+
 1. **`easy`** — Detect and contain a production secret key leak in noisy application logs
 2. **`medium`** — Identify and trace a SQL injection attack back to its source IP
 3. **`hard`** — Detect and remove an obfuscated Base64 backdoor in a vendor dependency
+
+## Key Differentiators
+
+### 🔄 Procedural Scenario Generation
+Unlike static benchmarks, every episode generates unique:
+- API keys (`sk_live_...` / `sk_test_...`)
+- Attacker IPs and domains
+- Target and decoy filenames
+- Timestamps and log ordering
+
+This makes the environment **non-memorizable** and genuinely useful for RL training.
+
+### 🎯 Cyber Kill Chain Enforcement
+The agent must follow a structured investigation path modeled on the Lockheed Martin Cyber Kill Chain:
+
+| Phase | Tool | Reward | Penalty if Skipped |
+|---|---|---|---|
+| 1. Reconnaissance | `query_logs` | +0.10 | — |
+| 2. Identification | `extract_ioc` | +0.30 | -0.15 |
+| 3. Containment | `inspect_file` | +0.20 | — |
+| 4. Remediation | `apply_fix` | +0.40 | -0.15 |
+
+### 📊 Adversarial Noise Scaling
+Difficulty tiers inject increasing amounts of irrelevant log noise:
+- **Easy**: 10% noise (clean investigation)
+- **Medium**: 30% noise (moderate misdirection)
+- **Hard**: 50% noise (heavy decoys + false alerts)
+
+### ✅ Test Suite
+```bash
+python tests/test_environment.py
+# ✔ Procedural generation verified
+# ✔ Kill chain ordering enforced
+# ✔ Grade boundaries [0.01, 0.99] compliant
+# 🏆 ALL 9 TESTS PASSED
+```
+
 
 ## Quick Start
 
