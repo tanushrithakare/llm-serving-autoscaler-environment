@@ -152,10 +152,11 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
             if h.get("tool") == "extract_ioc" and h.get("reward", 0) > 0:
                 ioc = h.get("params", "Unknown")
             if h.get("tool") == "apply_fix" and h.get("reward", 0) > 0:
-                action_taken = "Remediation applied"
+                action_taken = True
 
         confidence = sum(h.get("confidence", 0) for h in history) / max(len(history), 1)
         raw_status = state_data.get("status", "Active") if state_data else "Active"
+        max_steps  = (state_data.get("steps_remaining", 0) if state_data else 0) + len(history)
 
         # Dynamic status signal
         if raw_status == "Mitigated":
@@ -165,20 +166,30 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
         else:
             status_display = "🔴 Threat Ongoing — Investigation Active"
 
-        # Pending fields feel system-tracked, not static placeholders
+        # Action Taken: reflects real progress, not a static label
+        if action_taken:
+            action_display = "🟢 Remediation Applied"
+        elif len(history) > 0:
+            action_display = "🟡 Investigation in Progress"
+        else:
+            action_display = "⚠️ Pending"
+
+        # Confidence: only shown after both root cause + IOC are confirmed
+        confidence_display = f"{confidence:.2f}" if (root_cause and ioc) else "—"
+
         def fmt(val):
             return f"`{val}`" if val else "⚠️ Pending"
 
+        # No '### header' here — the tab label already shows '🧾 Incident Report'
         return (
-            f"### 🧾 Incident Report\n"
             f"| Field | Value |\n"
             f"|---|---|\n"
             f"| **Status** | {status_display} |\n"
             f"| **Root Cause** | {fmt(root_cause)} |\n"
             f"| **IOC** | {fmt(ioc)} |\n"
-            f"| **Action Taken** | {fmt(action_taken)} |\n"
-            f"| **Confidence** | {confidence:.2f} |\n"
-            f"| **Steps Used** | {len(history)} |"
+            f"| **Action Taken** | {action_display} |\n"
+            f"| **Confidence** | {confidence_display} |\n"
+            f"| **Steps Used** | {len(history)} / {max_steps} |"
         )
 
 
@@ -336,7 +347,7 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                         reasoning_output = gr.Markdown("Execute a step to see agent thinking.")
 
                     with gr.TabItem("📊 Summary"):
-                        gr.Markdown("##### 📊 Incident Report")
+                        gr.Markdown("##### 🧾 Incident Report")
                         summary_output = gr.Markdown("Investigation has not started.")
 
                     with gr.TabItem("🏆 Evaluation"):
