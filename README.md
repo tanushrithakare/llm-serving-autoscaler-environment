@@ -1,69 +1,76 @@
 ---
-title: Sentinel-SOC
+title: Sentinel-SOC (Forensic Env)
 emoji: 🛡️
-colorFrom: blue
-colorTo: indigo
+colorFrom: green
+colorTo: slate
 sdk: docker
 app_port: 7860
-short_description: Forensic AI environment for cybersecurity incident response
-tags:
-  - openenv
-  - security
-  - hackathon
-  - pytorch
 pinned: false
+short_description: High-fidelity forensic environment for security incident response.
+tags:
+- openenv
+- security
+- forensics
+- pytorch
 ---
 
 # Sentinel-SOC: Security Incident Analyzer 🛡️
 
-**Winner-Tier Submission for the Meta PyTorch Hackathon (OpenEnv Category)**
+**Sentinel-SOC** is a high-utility, real-world forensic environment where AI agents act as **Senior Security Analysts**. Unlike basic game environments, Sentinel-SOC requires multi-step deduction, noise filtering, and obfuscation decoding to mitigate critical security threats.
 
-Sentinel-SOC is a high-utility, real-world forensic environment where AI agents act as **Senior Security Analysts**. Unlike basic game environments, Sentinel-SOC requires multi-step deduction, noise filtering, and obfuscation decoding to mitigate critical security threats.
+## Description
+Sentinel-SOC provides a simulated Security Operations Center (SOC) where agents investigate supply-chain attacks, SQL injections, and production data leaks. The environment is designed to test the **forensic reasoning** of LLMs, forcing them to distinguish between decoy "test" data and malicious "live" payloads.
 
-## 📂 Repository Structure
-```text
-.
-├── models.py           # Action and Observation Pydantic models
-├── environment.py      # Core forensic logic and task definitions
-├── server/
-│   ├── app.py          # FastAPI server implementation
-│   └── static/         # Forensic Dashboard (HUD) frontend
-├── inference.py        # Multi-task autonomous analyst (Inference)
-├── openenv.yaml        # Standardized OpenEnv configuration
-├── grader.py           # Automated multi-task evaluation tool
-├── Dockerfile          # Production deployment configuration
-└── requirements.txt    # Project dependencies
-```
-- **Domain**: Cybersecurity Forensics & Incident Response.
-- **Task Complexity**:
-  - `leak-investigation` (Easy): Distinguish between test and production keys in noisy logs.
-  - `sqli-detection` (Medium): Identify SQL injection patterns and trace back to an internal IP.
-  - `backdoor-hunt` (Hard): Detect obfuscated Base64 backdoors in vendor dependencies.
-- **Deduction Path**: Query Logs ➔ Extract IOC ➔ Inspect Source ➔ Apply Fix.
+## Action Space
+Agents interact with the environment using the `IncidentAction` model:
 
-## 🧠 Advanced Features (Grand Master Edition)
-- **Signal vs. Noise**: Agents must ignore `sk_test` decoy data and focus on `sk_live` production leaks.
-- **Red Herrings**: Multiple suspicious files are provided; agents must cross-reference logs to find the true root cause.
-- **Obfuscation**: Hard tasks use Base64 encoding to test the agent's ability to decode malicious payloads.
-- **Efficiency Scoring**: Points are awarded not just for completion, but for investigation speed.
+- **`reasoning`** (str): The analyst's internal chain-of-thought explaining the forensic logic.
+- **`tool`** (str): The forensic tool to execute. Options include:
+    - `query_logs`: Fetch system and access logs.
+    - `inspect_file`: Read the contents of a specific source file.
+    - `decode_payload`: Decode suspected malicious strings (Base64).
+    - `remediate`: Apply a patch or rotate a compromised secret.
+- **`parameters`** (str): The specific target for the tool (e.g., "access.log", "config.py", or a base64 string).
 
-## 🛠️ Getting Started
+## Observation Space
+Agents receive an `IncidentObs` model after every step:
+
+- **`logs`** (str): Raw output from log queries or tool execution.
+- **`code_snippet`** (str): Snippets of code retrieved during inspection.
+- **`incident_thread`** (str): A summary of past actions and findings for context.
+- **`status`** (str): Current investigation state (`In Progress`, `Success`, `Failed`).
+- **`steps_remaining`** (int): How many actions are left in the budget.
+- **`reward_signal`** (float): Incremental progress score toward resolution.
+
+## Rewards
+The environment uses a **Forensic Efficiency Rubric**:
+- **Step Cost**: -0.05 per action (incentivizes speed).
+- **Milestone Reward**: +0.2 for identifying a true IOC (Indicator of Compromise).
+- **Final Reward**: +1.0 for successful remediation of the root cause.
+- **Failure Penalty**: -1.0 for applying the wrong fix or exhausting the budget.
+
+## Tasks
+The environment currently supports three distinct scenarios:
+1. **`leak-investigation` (Easy)**: Distinguish between test and production keys in noisy logs.
+2. **`sqli-detection` (Medium)**: Identify SQL injection patterns and trace back to an internal IP.
+3. **`backdoor-hunt` (Hard)**: Detect obfuscated Base64 backdoors in vendor dependencies.
+
+## Quick Start
 
 ### Local Setup
-1. **Requirements**: `pip install -r requirements.txt`
-2. **Launch Server**: `python -m uvicorn server.app:app --host 0.0.0.0 --port 7860`
-3. **Run Inference**:
-   ```powershell
-   $env:HF_TOKEN = "your_token"
+1. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. **Launch Environment Server**:
+   ```bash
+   python -m uvicorn server.app:app --host 0.0.0.0 --port 7860
+   ```
+3. **Run Baseline Agent**:
+   ```bash
+   export HF_TOKEN="your_token"
    python inference.py
    ```
 
-## 🧠 Advanced Features (Grand Master Edition)
-- **Analyst Guidance System**: Injects situational intelligence (e.g., `NEXT STEP: Call inspect_file`) into the observation, providing a clear reasoning path for LLMs.
-- **Provider-Agnostic Parser**: A robust JSON extraction layer in `inference.py` that handles markdown fences and model chatter, ensuring stability across any LLM backend.
-- **Signal vs. Noise**: Agents must ignore `sk_test` decoy data and focus on `sk_live` production leaks.
-- **Red Herrings**: Multiple suspicious logs are provided; agents must cross-reference to find the true root cause.
-- **Deterministic Efficiency**: Points are awarded with mathematical precision based on forensic progression and investigation speed.
-
 ---
-*Created for the Meta PyTorch Hackathon 2024.*
+*Developed for the Meta PyTorch Hackathon (OpenEnv).*
