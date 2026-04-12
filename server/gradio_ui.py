@@ -62,6 +62,66 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
             )
         return "\n".join(lines)
 
+    def build_reasoning(history):
+        """Build agent reasoning visibility panel."""
+        if not history:
+            return "No reasoning recorded yet. Execute a step to see agent thinking."
+        lines = []
+        for h in history:
+            step = h.get("step", "?")
+            tool = h.get("tool", "")
+            reasoning = h.get("reasoning", "No reasoning provided")
+            reward = h.get("reward", 0)
+            icon = "🟢" if reward > 0 else "🔴" if reward < 0 else "🟡"
+            lines.append(
+                f"### Step {step} — `{tool}` {icon}\n"
+                f"**Thought:** {reasoning}\n"
+            )
+        return "\n---\n".join(lines)
+
+    def build_explanation(history, state_data):
+        """Generate a plain-English explanation of the incident."""
+        if not history:
+            return "Start the investigation to generate an explanation."
+        
+        status = state_data.get("status", "Active") if state_data else "Active"
+        steps = len(history)
+        successes = sum(1 for h in history if h.get("reward", 0) > 0)
+        
+        attack_type = "unknown threat"
+        root_file = "not yet identified"
+        ioc_val = "not yet confirmed"
+        
+        for h in history:
+            if h.get("tool") == "inspect_file" and h.get("reward", 0) > 0:
+                root_file = h.get("params", "unknown")
+            if h.get("tool") == "extract_ioc" and h.get("reward", 0) > 0:
+                ioc_val = h.get("params", "unknown")
+        
+        if "sk_live" in ioc_val or "sk_test" in ioc_val:
+            attack_type = "production credential exposure"
+        elif any(c in ioc_val for c in [".", ":"]):
+            if any(d in ioc_val for d in [".cc", ".ru", ".xyz", ".tk", ".onion"]):
+                attack_type = "supply-chain backdoor with C2 callback"
+            else:
+                attack_type = "SQL injection from external IP"
+        
+        if status == "Mitigated":
+            return (
+                f"### ✅ Incident Resolved\n\n"
+                f"The AI analyst identified a **{attack_type}** originating from `{root_file}`. "
+                f"The malicious indicator `{ioc_val}` was confirmed and the threat was neutralized. "
+                f"The investigation took **{steps} steps** with **{successes} successful actions**.\n\n"
+                f"*In simple terms: A security vulnerability was found and fixed before it could cause damage.*"
+            )
+        else:
+            return (
+                f"### 🔍 Investigation In Progress\n\n"
+                f"The analyst is investigating a potential **{attack_type}**. "
+                f"So far, **{steps} steps** have been taken with **{successes} successful findings**.\n\n"
+                f"*In simple terms: The system detected suspicious activity and is working to identify and stop it.*"
+            )
+
     def build_summary(history, state_data):
         """Extract investigation summary from history."""
         if not history:
@@ -163,9 +223,12 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
             return "🟠 MEDIUM — initial assessment"
 
     # --- Build UI ---
-    with gr.Blocks(title="Sentinel-SOC Forensic Dashboard", css=CSS, theme=gr.themes.Soft(primary_hue="blue", neutral_hue="slate")) as demo:
-        gr.Markdown("# 🛡️ SENTINEL-SOC: Forensic Dashboard")
-        gr.Markdown("*AI-powered Security Operations Center for incident response and threat investigation*")
+    with gr.Blocks(title="Sentinel-SOC: AI Security Analyst", css=CSS, theme=gr.themes.Soft(primary_hue="blue", neutral_hue="slate")) as demo:
+        gr.Markdown("# 🛡️ SENTINEL-SOC: AI Security Analyst System")
+        gr.Markdown(
+            "> **⚠️ LIVE INCIDENT: Potential Security Breach Detected** — "
+            "System is in active investigation mode. AI Analyst is ready for tasking."
+        )
         
         with gr.Row():
             # LEFT PANEL: Controls + Status
@@ -216,10 +279,14 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                         thread_output = gr.Markdown(label="Threat Assessment")
                     with gr.TabItem("📜 Timeline"):
                         timeline_output = gr.Markdown("No steps recorded yet.")
+                    with gr.TabItem("🧠 Agent Reasoning"):
+                        reasoning_output = gr.Markdown("Execute a step to see agent thinking.")
                     with gr.TabItem("📊 Summary"):
                         summary_output = gr.Markdown("Investigation has not started.")
                     with gr.TabItem("🏆 Evaluation"):
                         eval_output = gr.Markdown("Complete the investigation to see evaluation.")
+                    with gr.TabItem("💡 Explain Simply"):
+                        explain_output = gr.Markdown("Start the investigation to generate an explanation.")
 
         # --- State management ---
         def fetch_full_state():
@@ -228,7 +295,7 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                 with httpx.Client(timeout=15) as client:
                     resp = client.get(f"{server_url}/state")
                     if resp.status_code != 200:
-                        return ["Error fetching state"] * 10
+                        return ["Error fetching state"] * 12
                     
                     data = resp.json()
                     history_resp = client.get(f"{server_url}/history")
@@ -245,11 +312,13 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                         data.get("code_snippet", ""),
                         data.get("incident_thread", ""),
                         build_timeline(history_data),
+                        build_reasoning(history_data),
                         build_summary(history_data, data),
                         build_evaluation(None, history_data, max_steps),
+                        build_explanation(history_data, data),
                     ]
             except Exception as e:
-                return [f"ERR: {str(e)}"] * 10
+                return [f"ERR: {str(e)}"] * 12
 
         def on_reset(task):
             try:
@@ -257,7 +326,7 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                     client.post(f"{server_url}/reset", params={"task": task})
                 return fetch_full_state()
             except Exception as e:
-                return [f"ERR: {str(e)}"] * 10
+                return [f"ERR: {str(e)}"] * 12
 
         def on_step(tool, params, reasoning):
             try:
@@ -270,7 +339,7 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                     client.post(f"{server_url}/step", json=action)
                 return fetch_full_state()
             except Exception as e:
-                return [f"ERR: {str(e)}"] * 10
+                return [f"ERR: {str(e)}"] * 12
 
         def on_grade():
             try:
@@ -293,7 +362,7 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
         all_outputs = [
             status_box, severity_box, reward_box, steps_box,
             logs_output, code_output, thread_output,
-            timeline_output, summary_output, eval_output
+            timeline_output, reasoning_output, summary_output, eval_output, explain_output
         ]
         
         reset_btn.click(on_reset, inputs=[task_dropdown], outputs=all_outputs)
