@@ -423,17 +423,47 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
         grade_btn.click(on_grade,                                                       outputs=[eval_output])
         demo.load(fetch_full_state,                                                     outputs=all_outputs)
 
-        # ── Dynamic target list per tool ──────────────────────────────────────
+        import re
+
         TOOL_TARGETS = {
             "query_logs":   ["all", "auth.log", "access.log", "error.log", "system.log"],
-            "extract_ioc":  [],   # IOC is episode-specific — paste from telemetry above
             "inspect_file": ["app.log", "config.py", "vendor/auth_lib.py",
                              "requirements.txt", "index.html", "auth_service.py"],
             "apply_fix":    ["remediate"],
         }
+
+        def extract_ioc_candidates():
+            """Parse live logs + code_snippet for IOC candidates."""
+            try:
+                with httpx.Client(timeout=5) as client:
+                    data = client.get(f"{server_url}/state").json()
+                text = data.get("logs", "") + "\n" + data.get("code_snippet", "")
+                candidates = []
+                # API keys: sk_live_... / sk_test_...
+                candidates += re.findall(r'sk_(?:live|test)_\w{10,}', text)
+                # IPv4 addresses (non-local)
+                ips = re.findall(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', text)
+                candidates += [ip for ip in ips if not ip.startswith(("127.", "10.", "192.168.", "0."))]
+                # Suspicious domains (.xyz .cc .ru .tk .onion)
+                candidates += re.findall(r'\b[\w-]+\.(?:xyz|cc|ru|tk|onion|io)\b', text)
+                # Base64-looking strings (20+ chars)
+                candidates += re.findall(r'[A-Za-z0-9+/]{20,}={0,2}', text)[:3]
+                # Deduplicate, preserve order
+                seen, unique = set(), []
+                for c in candidates:
+                    if c not in seen:
+                        seen.add(c)
+                        unique.append(c)
+                return unique or ["— run query_logs first —"]
+            except Exception:
+                return ["— run query_logs first —"]
+
         def update_targets(tool):
-            targets = TOOL_TARGETS.get(tool, [])
-            first   = targets[0] if targets else ""
+            if tool == "extract_ioc":
+                targets = extract_ioc_candidates()
+            else:
+                targets = TOOL_TARGETS.get(tool, [])
+            first = targets[0] if targets else ""
             return gr.Dropdown(choices=targets, value=first, allow_custom_value=True)
 
         tool_dropdown.change(update_targets, inputs=[tool_dropdown], outputs=[params_input])
