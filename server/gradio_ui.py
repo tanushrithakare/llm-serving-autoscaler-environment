@@ -153,9 +153,9 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
         ioc_val     = "not yet confirmed"
         for h in history:
             if h.get("tool") == "inspect_file" and h.get("reward", 0) > 0:
-                root_file = h.get("params", "unknown")
+                root_file = h.get("parameters", "unknown")
             if h.get("tool") == "extract_ioc" and h.get("reward", 0) > 0:
-                ioc_val = h.get("params", "unknown")
+                ioc_val = h.get("parameters", "unknown")
         
         if "sk_live" in ioc_val or "sk_test" in ioc_val:
             attack_type = "production credential exposure"
@@ -191,9 +191,9 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
 
         for h in history:
             if h.get("tool") == "inspect_file" and h.get("reward", 0) > 0:
-                root_cause = h.get("params", "Unknown")
+                root_cause = h.get("parameters", "Unknown")
             if h.get("tool") == "extract_ioc" and h.get("reward", 0) > 0:
-                ioc = h.get("params", "Unknown")
+                ioc = h.get("parameters", "Unknown")
             if h.get("tool") == "apply_fix" and h.get("reward", 0) > 0:
                 action_taken = True
 
