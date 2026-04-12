@@ -314,18 +314,21 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
 
         with gr.Row(equal_height=False):
 
-            # ── LEFT: RECON WORKBENCH ────────────────────────────────────────
+            # ── LEFT: INCIDENT CONTROLLER ────────────────────────────────────
             with gr.Column(scale=4):
                 with gr.Group(elem_classes=["workbench-group"]):
-                    gr.Markdown("### 🛠️ Analyst Action Workbench")
+                    gr.Markdown("### 🎮 Incident Response Toolkit")
                     
                     with gr.Row():
-                        task_dropdown = gr.Radio(
-                            choices=["easy", "medium", "hard"],
-                            value="easy",
-                            label="Incident Severity (Level)"
-                        )
-                        reset_btn = gr.Button("🔄 Reset Scenario", variant="secondary", size="sm", elem_classes=["secondary-btn"])
+                        with gr.Column(scale=2):
+                            task_dropdown = gr.Dropdown(
+                                choices=["easy", "medium", "hard"],
+                                value="easy",
+                                label="Simulation Target",
+                                info="Select difficulty level"
+                            )
+                        with gr.Column(scale=1):
+                            reset_btn = gr.Button("🔄 Reset", variant="secondary", size="sm", elem_classes=["secondary-btn"])
 
                     gr.Markdown("---")
                     
@@ -333,24 +336,28 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                         tool_dropdown = gr.Dropdown(
                             choices=["query_logs", "extract_ioc", "inspect_file", "apply_fix"],
                             value="query_logs",
-                            label="Forensic Tool"
+                            label="Diagnostic Tool",
+                            info="Select forensic capability"
                         )
                         params_input = gr.Dropdown(
                             choices=["all", "auth.log", "access.log", "error.log", "system.log"],
                             value="all",
-                            label="Target Parameter",
+                            label="Tool Parameter",
+                            info="Input target artifact",
                             allow_custom_value=True
                         )
                     
                     reasoning_input = gr.Textbox(
-                        label="Investigative Reasoning",
-                        placeholder="Explain why this action is necessary for the current kill-chain phase...",
+                        label="Investigative Thought (Reasoning)",
+                        placeholder="Explain your deduction...",
                         lines=2
                     )
                     
                     with gr.Row():
-                        step_btn = gr.Button("▶ Execute Action", variant="primary", scale=2, elem_classes=["primary-btn"])
-                        grade_btn = gr.Button("📊 Finalize & Grade", variant="stop", scale=1)
+                        step_btn = gr.Button("▶ Run Diagnostic", variant="primary", scale=2, elem_classes=["primary-btn"])
+                        grade_btn = gr.Button("📊 Final Review", variant="stop", scale=1)
+
+                    gr.Markdown("<p style='font-size:0.75em; color:#666; text-align:center;'>Standard SOC Methodology: Recon → ID → Contain → Fix</p>")
 
             # ── RIGHT: TELEMETRY & INTEL ─────────────────────────────────────
             with gr.Column(scale=6):

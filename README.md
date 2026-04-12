@@ -55,6 +55,28 @@ Traditional benchmarks evaluate whether an agent reaches the correct answer. Sen
 2. **Adversarial Resilience**: Unlike static datasets, our procedural engine allows teams to test if agents can resist "noise-injection" attacks (common in real-world log spoofing).
 3. **Auditable Intelligence**: The Cyber Kill Chain enforcement ensures that AI actions are not just "correct" but **procedurally compliant** with security industry standards.
 
+## Environment Specification
+
+| Property | Value |
+|---|---|
+| **API Compliance** | OpenEnv v1.1 |
+| **Action Space** | Discrete (4 Key Tools + Logic) |
+| **Observation Space** | Multi-modal (Textual Logs + Code Snippets) |
+| **State Transitions** | Cyber Kill Chain State Machine |
+| **Reward Distribution** | Shaped (Partial Success + Budget Penalties) |
+| **Scenarios** | Procedural (Random Seeded Episodes) |
+
+## Diagnostic Toolkit
+
+Sentinel-SOC evaluates the agent's ability to select the correct forensic tool for the current kill-chain phase:
+
+| Tool | Industrial Equivalent | Purpose |
+|---|---|---|
+| `query_logs` | ELK / Splunk | Ingest raw system telemetry to find initial signals. |
+| `extract_ioc` | Threat Intelligence | Validate suspicious strings against intelligence databases. |
+| `inspect_file` | EDR / Carbon Black | Locally inspect file content for malicious logic or backdoors. |
+| `apply_fix` | SOAR / Remediation | Execute containment and neutralization actions. |
+
 ## Core Features
 
 - Evaluates **how** the agent reasons — not just outcomes
