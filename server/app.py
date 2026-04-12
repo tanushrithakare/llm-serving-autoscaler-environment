@@ -69,12 +69,8 @@ def get_history():
     return {"history": env.history}
 
 # --- Gradio UI Integration ---
-# Calculate the correct SERVER_URL for HF Spaces (HTTPS support)
-SERVER_URL = os.getenv("SPACE_HOST", "http://localhost:7860")
-if not SERVER_URL.startswith("http"):
-    SERVER_URL = "https://" + SERVER_URL
-
-ui_app = create_gradio_ui(server_url=SERVER_URL)
+# For HF Spaces, internal communication should use localhost to avoid proxy/cache issues
+ui_app = create_gradio_ui(server_url="http://localhost:7860")
 app = gr.mount_gradio_app(app, ui_app, path="/")
 
 def main():

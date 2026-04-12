@@ -256,16 +256,8 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
         return "RECONNAISSANCE"
 
     # ── Build UI ─────────────────────────────────────────────────────────────
-    with gr.Blocks(
-        title="Sentinel-SOC | AI Security Analyst",
-        css=CSS,
-        theme=gr.themes.Default(primary_hue="blue", neutral_hue="slate").set(
-            body_background_fill="#111",
-            block_background_fill="#1a1a1a",
-            block_border_width="1px",
-            block_title_text_color="#eee"
-        )
-    ) as demo:
+    with gr.Blocks(title="Sentinel-SOC | AI Security Analyst") as demo:
+        # Note: theme and css are now handled at launch/mount in Gradio 6
 
         # ── SOC HEADER BAR ───────────────────────────────────────────────────
         with gr.Row(elem_classes=["soc-header"]):
@@ -352,13 +344,15 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
             return f'<div class="hud-card {cls}"><p>{label}</p><h3>{value}</h3></div>'
 
         def fetch_full_state():
+            headers = {"Cache-Control": "no-cache", "Pragma": "no-cache"}
             try:
                 with httpx.Client(timeout=15) as client:
-                    resp = client.get(f"{server_url}/state")
+                    resp = client.get(f"{server_url}/state", headers=headers)
                     if resp.status_code != 200: 
                         return [fmt_hud("ERR", "DISCONNECTED", "danger")] * 4 + ["ERR"] * 7
                     data = resp.json()
-                    history_data = client.get(f"{server_url}/history").json().get("history", [])
+                    hist_resp = client.get(f"{server_url}/history", headers=headers)
+                    history_data = hist_resp.json().get("history", [])
                     max_steps = data.get("steps_remaining", 0) + len(history_data)
                     
                     # HUD Updates
@@ -391,17 +385,21 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                 return [fmt_hud("ERR", str(e), "danger")] * 4 + ["ERR"] * 7
 
         def on_reset(task):
+            print(f"DEBUG: Reset triggered with task={task}")
+            headers = {"Cache-Control": "no-cache"}
             try:
                 with httpx.Client(timeout=15) as client:
-                    client.post(f"{server_url}/reset", params={"task": task})
+                    client.post(f"{server_url}/reset", params={"task": task}, headers=headers)
                 return fetch_full_state()
             except Exception: return [fmt_hud("ERR", "RESET FAILED", "danger")] * 4 + ["ERR"] * 7
 
         def on_step(tool, params, reasoning):
+            print(f"DEBUG: Action triggered tool={tool} params={params}")
+            headers = {"Cache-Control": "no-cache"}
             try:
                 action = {"reasoning": reasoning or f"Executing {tool}", "tool": tool, "parameters": params or ""}
                 with httpx.Client(timeout=15) as client:
-                    client.post(f"{server_url}/step", json=action)
+                    client.post(f"{server_url}/step", json=action, headers=headers)
                 return fetch_full_state()
             except Exception: return [fmt_hud("ERR", "STEP FAILED", "danger")] * 4 + ["ERR"] * 7
 
