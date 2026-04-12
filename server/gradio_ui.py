@@ -9,9 +9,9 @@ import numpy as np
 CSS = """
 .gradio-container {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif !important;
-    max-width: 1200px !important;
+    max-width: 1000px !important;
     margin: 0 auto !important;
-    padding: 20px !important;
+    padding: 30px 10px !important;
     background-color: #0d0d0d !important;
 }
 
@@ -22,9 +22,10 @@ body { background-color: #0d0d0d !important; color: #e0e0e0 !important; }
     background: #1c1c1c !important;
     border: 1px solid #444 !important;
     border-radius: 8px !important;
-    padding: 18px !important;
-    margin: 10px 0 !important;
+    padding: 24px !important;
+    margin-bottom: 20px !important;
     box-shadow: 0 4px 15px rgba(0,0,0,0.6) !important;
+    min-height: 100px;
 }
 
 /* SOC Header Bar - Deep Grey */
@@ -32,8 +33,8 @@ body { background-color: #0d0d0d !important; color: #e0e0e0 !important; }
     background: #1c1c1c;
     border: 1px solid #444;
     border-radius: 6px;
-    padding: 15px 25px;
-    margin-bottom: 20px;
+    padding: 20px 30px;
+    margin-bottom: 30px;
 }
 
 .status-dot {
@@ -45,60 +46,62 @@ body { background-color: #0d0d0d !important; color: #e0e0e0 !important; }
 }
 .dot-green { background-color: #00ff9c; box-shadow: 0 0 10px #00ff9c; }
 .dot-active { background-color: #3b82f6; box-shadow: 0 0 10px #3b82f6; }
-.dot-shield { background-color: #facc15; box-shadow: 0 0 10px #facc15; }
+.dot-shield { background-color: #777; box-shadow: 0 0 5px #777; }
 
 /* HUD Quick Stats - Grey Baseline */
 .hud-card {
     background: #1c1c1c !important;
     border: 1px solid #444 !important;
     border-radius: 8px;
-    padding: 12px;
+    padding: 15px;
     text-align: center;
-    min-height: 90px;
+    min-height: 100px;
 }
-.hud-card p { margin: 0; color: #888; font-size: 0.8em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-.hud-card h3 { margin: 8px 0 0 0; font-size: 1.6em; font-weight: 700; color: #eee; }
+.hud-card p { margin: 0; color: #888; font-size: 0.85em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.hud-card h3 { margin: 10px 0 0 0; font-size: 1.8em; font-weight: 700; color: #eee; }
 
-/* HUD Success/Danger/Warning states */
-.hud-green h3 { color: #00ff9c !important; }
-.hud-red h3 { color: #ff4d4f !important; }
-.hud-yellow h3 { color: #facc15 !important; }
-.hud-blue h3 { color: #58a6ff !important; }
+.hud-green h3 { color: #00ff9c !important; text-shadow: 0 0 10px rgba(0,255,156,0.2); }
+.hud-red h3 { color: #ff4d4f !important; text-shadow: 0 0 10px rgba(255,77,79,0.2); }
+.hud-yellow h3 { color: #facc15 !important; text-shadow: 0 0 10px rgba(250,204,21,0.2); }
+.hud-blue h3 { color: #00f2ff !important; text-shadow: 0 0 10px rgba(0,242,255,0.2); }
 
-/* Tab styling */
-.tabs > .tab-nav { border-bottom: 1px solid #444 !important; gap: 8px !important; }
-.tabs > .tab-nav button.selected { border-bottom: 2px solid #00ff9c !important; color: #00ff9c !important; background: transparent !important; }
+/* Tab styling - Grey Base */
+.tabs > .tab-nav { border-bottom: 1px solid #444 !important; gap: 20px !important; margin-bottom: 15px !important; }
+.tabs > .tab-nav button { color: #888 !important; font-weight: 600 !important; font-size: 0.9em !important; }
+.tabs > .tab-nav button.selected { border-bottom: 2px solid #00f2ff !important; color: #00f2ff !important; background: transparent !important; }
 
-/* Buttons - Grey & Neon */
+/* Buttons - High Contrast Grey & Neon */
 .primary-btn {
-    background: #333 !important;
-    color: #ffffff !important;
-    font-weight: 600 !important;
-    border: 1px solid #444 !important;
-    padding: 10px 20px !important;
+    background: #252525 !important;
+    color: #00f2ff !important;
+    font-weight: 700 !important;
+    border: 1px solid #00f2ff !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 12px !important;
 }
-.primary-btn:hover { background: #2ea043 !important; box-shadow: 0 0 12px rgba(46,160,67,0.4); }
+.primary-btn:hover { background: #00f2ff !important; color: #000 !important; box-shadow: 0 0 15px rgba(0,242,255,0.4); }
 
 .stop-btn {
-    background: #da3633 !important;
-    color: white !important;
-    border: 1px solid rgba(240,246,252,0.1) !important;
+    background: #1c1c1c !important;
+    color: #ff4d4f !important;
+    border: 1px solid #ff4d4f !important;
 }
-.stop-btn:hover { background: #f85149 !important; }
+.stop-btn:hover { background: #ff4d4f !important; color: #fff !important; }
 
 .secondary-btn {
-    background: #21262d !important;
-    color: #c9d1d9 !important;
-    border: 1px solid #30363d !important;
+    background: #252525 !important;
+    color: #888 !important;
+    border: 1px solid #444 !important;
 }
-.secondary-btn:hover { background: #30363d !important; }
 
 /* Code and Input styles */
-.code-wrap { border: 1px solid #444 !important; border-radius: 6px !important; }
+.code-wrap { border: 1px solid #444 !important; border-radius: 6px !important; padding: 5px !important; }
 textarea, input, select {
     background-color: #111 !important;
     border: 1px solid #444 !important;
-    color: #e0e0e0 !important;
+    color: #f0f0f0 !important;
+    margin-bottom: 10px !important;
 }
 """
 
@@ -280,10 +283,11 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
 
         # ── QUICK STATS HUD ──────────────────────────────────────────────────
         with gr.Row():
-            steps_hud    = gr.HTML()
-            status_hud   = gr.HTML()
-            phase_hud    = gr.HTML()
-            score_hud    = gr.HTML()
+            steps_hud    = gr.HTML(scale=1)
+            status_hud   = gr.HTML(scale=1)
+        with gr.Row():
+            phase_hud    = gr.HTML(scale=1)
+            score_hud    = gr.HTML(scale=1)
 
         gr.Markdown("<br>")
 
@@ -292,65 +296,54 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
         with gr.Row(equal_height=False):
 
             # ── LEFT: INCIDENT CONTROLLER ────────────────────────────────────
-            with gr.Column(scale=4):
+            with gr.Column(scale=4, min_width=350):
                 with gr.Group(elem_classes=["soc-card"]):
                     gr.Markdown("### 🎮 Incident Response Toolkit")
                     
-                    with gr.Row():
-                        with gr.Column(scale=2, min_width=100):
-                            task_dropdown = gr.Dropdown(
-                                choices=["easy", "medium", "hard"],
-                                value="easy",
-                                label="Simulation Target"
-                            )
-                        with gr.Column(scale=1, min_width=80):
-                            reset_btn = gr.Button("🔄 Reset", variant="secondary", size="sm", elem_classes=["secondary-btn"])
+                    task_dropdown = gr.Dropdown(
+                        choices=["easy", "medium", "hard"],
+                        value="easy",
+                        label="Simulation Target"
+                    )
+                    reset_btn = gr.Button("🔄 Initialize Scenario", variant="secondary", size="md", elem_classes=["secondary-btn"])
 
                     gr.Markdown("---")
                     
-                    with gr.Row():
-                        tool_dropdown = gr.Dropdown(
-                            choices=["query_logs", "extract_ioc", "inspect_file", "apply_fix"],
-                            value="query_logs",
-                            label="Diagnostic Tool"
-                        )
-                        params_input = gr.Dropdown(
-                            choices=["all", "auth.log", "access.log", "error.log", "system.log"],
-                            value="all",
-                            label="Tool Parameter",
-                            allow_custom_value=True
-                        )
+                    tool_dropdown = gr.Dropdown(
+                        choices=["query_logs", "extract_ioc", "inspect_file", "apply_fix"],
+                        value="query_logs",
+                        label="Diagnostic Tool"
+                    )
+                    params_input = gr.Dropdown(
+                        choices=["all", "auth.log", "access.log", "error.log", "system.log"],
+                        value="all",
+                        label="Target Artifact",
+                        allow_custom_value=True
+                    )
                     
                     reasoning_input = gr.Textbox(
                         label="Investigative Reasoning",
                         placeholder="Explain your deduction...",
-                        lines=2
+                        lines=3
                     )
                     
-                    with gr.Row():
-                        step_btn = gr.Button("▶ Run Diagnostic", variant="primary", scale=2, elem_classes=["primary-btn"])
-                        grade_btn = gr.Button("📊 Final Review", variant="stop", scale=1, elem_classes=["stop-btn"])
+                    step_btn = gr.Button("▶ Execute Action", variant="primary", elem_classes=["primary-btn"])
+                    grade_btn = gr.Button("📊 Final Review", variant="stop", elem_classes=["stop-btn"])
 
             # ── RIGHT: TELEMETRY & INTEL ─────────────────────────────────────
             with gr.Column(scale=6):
                 with gr.Tabs(elem_classes=["tabs"]):
-                    with gr.TabItem("📊 SUMMARY"):
+                    with gr.TabItem("📋 STATUS & EVAL"):
                         summary_output = gr.Markdown(elem_classes=["soc-card"])
-
-                    with gr.TabItem("🕵️ LOGS"):
-                        logs_output = gr.Code(label="System Telemetry", language="shell", lines=18, interactive=False)
-
-                    with gr.TabItem("💻 SOURCE"):
-                        code_output = gr.Code(label="Source Investigation", language="python", lines=18, interactive=False)
-
-                    with gr.TabItem("📜 TIMELINE"):
-                        timeline_output = gr.Markdown(elem_classes=["soc-card"])
-
-                    with gr.TabItem("🧠 BRAIN"):
-                        reasoning_output = gr.Markdown(elem_classes=["soc-card"])
-
-                    with gr.TabItem("🏆 EVALUATION"):
                         eval_output = gr.Markdown(elem_classes=["soc-card"])
+
+                    with gr.TabItem("🔍 FORENSIC DATA"):
+                        logs_output = gr.Code(label="System Telemetry", language="shell", lines=15, interactive=False)
+                        code_output = gr.Code(label="Source Investigation", language="python", lines=12, interactive=False)
+
+                    with gr.TabItem("📜 ANALYSIS TRACE"):
+                        timeline_output = gr.Markdown(elem_classes=["soc-card"])
+                        reasoning_output = gr.Markdown(elem_classes=["soc-card"])
 
         # ── STATE LOGIC ──────────────────────────────────────────────────────
         def fmt_hud(label, value, status="info"):
