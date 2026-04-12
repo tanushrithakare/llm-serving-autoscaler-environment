@@ -180,6 +180,15 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
         def fmt(val):
             return f"`{val}`" if val else "⚠️ Pending"
 
+        # Investigation Behavior: Signals adaptive reasoning vs efficiency
+        has_mistakes = any(h.get("reward", 0) < 0 for h in history)
+        if has_mistakes:
+            behavior_signal = "⚠️ **Initial missteps detected** — Analyst adjusted strategy and pivoted to correct artifacts."
+        elif len(history) > 0:
+            behavior_signal = "✅ **High-precision investigation** — Analyst correctly prioritized findings with zero wasted actions."
+        else:
+            behavior_signal = "—"
+
         # No '### header' here — the tab label already shows '🧾 Incident Report'
         return (
             f"| Field | Value |\n"
@@ -189,7 +198,9 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
             f"| **IOC** | {fmt(ioc)} |\n"
             f"| **Action Taken** | {action_display} |\n"
             f"| **Confidence** | {confidence_display} |\n"
-            f"| **Steps Used** | {len(history)} / {max_steps} |"
+            f"| **Steps Used** | {len(history)} / {max_steps} |\n\n"
+            f"**🧠 Investigation Behavior**\n\n"
+            f"{behavior_signal}"
         )
 
 
