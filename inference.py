@@ -1,8 +1,20 @@
+import sys
+import subprocess
+
+# Self-healing dependency block for brittle validator environments
+def ensure_deps():
+    for pkg in ["httpx", "numpy", "openai", "pydantic"]:
+        try:
+            __import__(pkg)
+        except ImportError:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", pkg])
+
+ensure_deps()
+
 import asyncio
 import os
 import textwrap
 import json
-import sys
 import base64
 import re
 import httpx
