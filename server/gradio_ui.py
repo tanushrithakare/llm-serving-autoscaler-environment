@@ -8,7 +8,12 @@ CSS = """
     max-width: 1400px !important;
 }
 
-/* Status cards */
+/* Terminal-style code blocks */
+.code-wrap textarea, .code-wrap code {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace !important;
+    font-size: 0.82em !important;
+    line-height: 1.5 !important;
+}
 .hud-card {
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
     border: 1px solid #0f3460;
@@ -211,8 +216,10 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
             ' — Investigation in progress'
             '</div>'
         )
-        gr.Markdown(
-            "*AI Analyst using structured forensic tools and Cyber Kill Chain reasoning*",
+        gr.HTML(
+            '<p style="margin:0 0 10px 0; font-size:0.78em; color:#888; letter-spacing:0.05em;">'
+            '🟢 System Operational &nbsp;•&nbsp; AI Analyst Active &nbsp;•&nbsp; Kill Chain Tracking Enabled'
+            '</p>'
         )
         gr.Markdown("---")
 
@@ -263,10 +270,11 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                 with gr.Tabs():
 
                     with gr.TabItem("📄 Logs"):
+                        gr.Markdown("##### 📡 Live Telemetry Feed")
                         logs_output = gr.Code(
-                            label="Raw Telemetry",
-                            language=None,
-                            lines=22,
+                            label="",
+                            language="shell",
+                            lines=20,
                             interactive=False
                         )
 
@@ -282,18 +290,23 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                         thread_output = gr.Markdown(label="Threat Assessment")
 
                     with gr.TabItem("📜 Timeline"):
+                        gr.Markdown("##### 🕵️ Investigation Timeline")
                         timeline_output = gr.Markdown("No steps recorded yet.")
 
                     with gr.TabItem("🧠 Reasoning"):
+                        gr.Markdown("##### 🧠 Analyst Reasoning Trace")
                         reasoning_output = gr.Markdown("Execute a step to see agent thinking.")
 
                     with gr.TabItem("📊 Summary"):
+                        gr.Markdown("##### 📊 Incident Report")
                         summary_output = gr.Markdown("Investigation has not started.")
 
                     with gr.TabItem("🏆 Evaluation"):
+                        gr.Markdown("##### 🏆 Kill Chain Score Breakdown")
                         eval_output = gr.Markdown("Complete the investigation to see evaluation.")
 
                     with gr.TabItem("💡 Explain"):
+                        gr.Markdown("##### 💡 Plain-English Briefing")
                         explain_output = gr.Markdown("Start the investigation to generate an explanation.")
 
         # ── State management (unchanged logic) ───────────────────────────────
