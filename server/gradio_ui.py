@@ -7,106 +7,63 @@ import base64
 import numpy as np
 
 CSS = """
-.gradio-container {
-    font-family: 'Courier New', Courier, monospace !important;
-    max-width: 1000px !important;
-    margin: 0 auto !important;
-    padding: 30px 10px !important;
-    background-color: #040d1a !important; /* Midnight Navy */
+/* FORCE DARK NAVY THEME - GLOBAL VARIABLES */
+:root, .dark {
+    --body-background-fill: #040d1a !important;
+    --block-background-fill: #0a192f !important;
+    --block-border-color: #112240 !important;
+    --input-background-fill: #020c1b !important;
+    --button-primary-background-fill: #112240 !important;
+    --button-primary-text-color: #64ffda !important;
+    --border-color-primary: #112240 !important;
 }
 
-body { background-color: #040d1a !important; color: #e0f0ff !important; }
+.gradio-container {
+    background-color: #040d1a !important;
+    color: #ccd6f6 !important;
+}
 
-/* SOC-Grade Cards - DEEP NAVY */
+/* Card Styling */
 .soc-card {
     background: #0a192f !important;
-    border: 1px solid #112240 !important;
+    border: 2px solid #112240 !important;
     border-radius: 8px !important;
     padding: 24px !important;
     margin-bottom: 20px !important;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.8) !important;
-    min-height: 100px;
 }
 
-/* SOC Header Bar - Deep Navy */
+/* Header Styling */
 .soc-header {
-    background: #0a192f;
-    border: 1px solid #112240;
-    border-radius: 6px;
-    padding: 20px 30px;
-    margin-bottom: 30px;
-}
-
-.status-dot {
-    height: 10px;
-    width: 10px;
-    border-radius: 50%;
-    display: inline-block;
-    margin-right: 8px;
-}
-.dot-green { background-color: #00ff9c; box-shadow: 0 0 10px #00ff9c; }
-.dot-active { background-color: #3b82f6; box-shadow: 0 0 10px #3b82f6; }
-.dot-shield { background-color: #777; box-shadow: 0 0 5px #777; }
-
-/* HUD Quick Stats - Blue Baseline */
-.hud-card {
     background: #0a192f !important;
     border: 1px solid #112240 !important;
-    border-radius: 8px;
-    padding: 15px;
-    text-align: center;
-    min-height: 100px;
 }
-.hud-card p { margin: 0; color: #64ffda; font-size: 0.85em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; }
-.hud-card h3 { margin: 10px 0 0 0; font-size: 1.8em; font-weight: 700; color: #ccd6f6; }
 
-.hud-green h3 { color: #00ff9c !important; text-shadow: 0 0 10px rgba(0,255,156,0.3); }
-.hud-red h3 { color: #ff4d4f !important; text-shadow: 0 0 10px rgba(255,77,79,0.3); }
-.hud-yellow h3 { color: #facc15 !important; text-shadow: 0 0 10px rgba(250,204,21,0.3); }
-.hud-blue h3 { color: #00f2ff !important; text-shadow: 0 0 10px rgba(0,242,255,0.3); }
-
-/* Tab styling - Navy Base */
-.tabs > .tab-nav { border-bottom: 1px solid #112240 !important; gap: 20px !important; margin-bottom: 15px !important; }
-.tabs > .tab-nav button { color: #8892b0 !important; font-weight: 600 !important; font-size: 0.9em !important; }
-.tabs > .tab-nav button.selected { border-bottom: 2px solid #64ffda !important; color: #64ffda !important; background: transparent !important; }
-
-/* Buttons - High Contrast Navy & Cyan */
-.primary-btn {
-    background: #112240 !important;
+/* Button Hammer */
+.primary-btn, button.primary {
+    background-color: #112240 !important;
     color: #64ffda !important;
-    font-weight: 700 !important;
-    border: 1px solid #64ffda !important;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    padding: 12px !important;
+    border: 2px solid #64ffda !important;
+    text-transform: uppercase !important;
 }
-.primary-btn:hover { background: #64ffda !important; color: #0a192f !important; box-shadow: 0 0 20px rgba(100,255,218,0.4); }
 
-.stop-btn {
-    background: #0a192f !important;
+/* Log Coloring */
+.logs-area pre, .logs-area code {
+    color: #00ff9c !important;
+    background: #020c1b !important;
+}
+.logs-area .token.string, .logs-area .hljs-string {
     color: #ff4d4f !important;
-    border: 1px solid #ff4d4f !important;
-}
-.stop-btn:hover { background: #ff4d4f !important; color: #fff !important; }
-
-.secondary-btn {
-    background: #112240 !important;
-    color: #8892b0 !important;
-    border: 1px solid #233554 !important;
 }
 
-/* Forensic Logs - Green/Red styling for Code items */
-.logs-area pre { color: #00ff9c !important; background: #020c1b !important; }
-.logs-area .token.string { color: #ff4d4f !important; }
-.logs-area .token.comment { color: #8892b0 !important; }
+/* General Monospace */
+* { font-family: 'Courier New', Courier, monospace !important; }
+"""
 
-/* Code and Input styles */
-.code-wrap { border: 1px solid #112240 !important; border-radius: 6px !important; padding: 5px !important; background: #020c1b !important; }
-textarea, input, select {
-    background-color: #020c1b !important;
-    border: 1px solid #112240 !important;
-    color: #ccd6f6 !important;
-    margin-bottom: 10px !important;
+JS_FORCE_DARK = """
+function() {
+    document.body.classList.add('dark');
+    const container = document.querySelector('.gradio-container');
+    if (container) container.classList.add('dark');
 }
 """
 
@@ -308,12 +265,8 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
     with gr.Blocks(
         title="Sentinel-SOC | AI Security Analyst",
         css=CSS,
-        theme=gr.themes.Default(primary_hue="blue", neutral_hue="slate").set(
-            body_background_fill="#040d1a",
-            block_background_fill="#0a192f",
-            block_border_width="1px",
-            block_title_text_color="#64ffda"
-        )
+        js=JS_FORCE_DARK,
+        theme=gr.themes.Default(primary_hue="blue", neutral_hue="slate")
     ) as demo:
 
         # ── SOC HEADER BAR ───────────────────────────────────────────────────
