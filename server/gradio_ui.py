@@ -7,16 +7,19 @@ import base64
 import numpy as np
 
 CSS = """
-/* UNIVERSAL NAVY HAMMER */
-:root, .dark, body, .gradio-container {
+/* UNIVERSAL NAVY HAMMER - TARGET BOTH MODES */
+:root, .dark, [data-theme='light'], [data-theme='dark'], body, html, .gradio-container {
     --body-background-fill: #020617 !important;
+    --body-background-fill-dark: #020617 !important;
     --block-background-fill: #0f172a !important;
+    --block-background-fill-dark: #0f172a !important;
     --block-border-color: #1e293b !important;
     --input-background-fill: #020617 !important;
     --button-primary-background-fill: #22d3ee !important;
     --button-primary-text-color: #020617 !important;
     --button-primary-border-color: #22d3ee !important;
     background-color: #020617 !important;
+    color: #ccd6f6 !important;
 }
 
 /* Card & HUD Refinement */
@@ -49,10 +52,9 @@ button.primary, .primary-btn {
 """
 
 JS_FORCE_DARK = """
-function() {
+() => {
+    document.documentElement.classList.add('dark');
     document.body.classList.add('dark');
-    const container = document.querySelector('.gradio-container');
-    if (container) container.classList.add('dark');
 }
 """
 
@@ -254,12 +256,15 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
     with gr.Blocks(
         title="Sentinel-SOC | AI Security Analyst",
         css=CSS,
+        js=JS_FORCE_DARK,
         theme=gr.themes.Soft(
             primary_hue="cyan",
             neutral_hue="slate",
         ).set(
             body_background_fill="#020617",
+            body_background_fill_dark="#020617",
             block_background_fill="#0f172a",
+            block_background_fill_dark="#0f172a",
             block_border_width="1px",
             block_title_text_color="#22d3ee"
         )
