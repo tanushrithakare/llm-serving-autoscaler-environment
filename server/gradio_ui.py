@@ -256,29 +256,46 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
         return "RECONNAISSANCE"
 
     def get_expert_action(data, history):
-        """High-fidelity forensic heuristic to drive the autonomous investigation."""
-        # 1. Reconnaissance phase
-        if not any(h['tool'] == 'query_logs' and h['reward'] > 0 for h in history):
-            return {"tool": "query_logs", "parameters": "all", "reasoning": "Standard SOC Protocol: Initializing broad telemetry ingestion to identify anomalous patterns."}
-        
-        # 2. Identification phase (Scrape IOC from logs)
-        if not any(h['tool'] == 'extract_ioc' and h['reward'] > 0 for h in history):
-            logs = data.get("logs", "")
-            match = re.search(r'sk_(?:live|test)_\w{10,}|(?:\d{1,3}\.){3}\d{1,3}|[\w-]+\.(?:xyz|cc|ru|tk|onion|io)', logs)
-            target = match.group(0) if match else "unknown"
-            return {"tool": "extract_ioc", "parameters": target, "reasoning": f"Indicator of Compromise (IOC) localized in telemetry. Pivoting investigation to isolate artifact: {target}"}
+        """Advanced forensic heuristic with cross-step telemetry correlation."""
+        logs = data.get("logs", "")
+        # Get result of first successful query_logs
+        recon_feedback = ""
+        for h in history:
+            if h['tool'] == 'query_logs' and h['reward'] > 0:
+                recon_feedback = h['feedback']
+                break
 
-        # 3. Containment phase (Identify source file)
+        # 1. Reconnaissance phase
+        if not recon_feedback:
+            return {"tool": "query_logs", "parameters": "all", "reasoning": "Strategy: Initializing broad-spectrum log ingestion to establish a behavioral baseline."}
+        
+        # 2. Identification phase (Scrape IOC)
+        if not any(h['tool'] == 'extract_ioc' and h['reward'] > 0 for h in history):
+            # Prioritize 'live' keys over 'test' keys
+            live_key = re.search(r'sk_live_\w{10,}', logs)
+            if live_key:
+                target = live_key.group(0)
+            else:
+                # General IOC match (IP, Domain, etc)
+                match = re.search(r'sk_test_\w{10,}|(?:\d{1,3}\.){3}\d{1,3}|[\w-]+\.(?:xyz|cc|ru|tk|onion|io)', logs)
+                target = match.group(0) if match else "unknown"
+            return {"tool": "extract_ioc", "parameters": target, "reasoning": f"Critical IOC '{target}' isolated in telemetry. Elevating investigation priority."}
+
+        # 3. Containment phase (Root Cause)
         if not any(h['tool'] == 'inspect_file' and h['reward'] > 0 for h in history):
-            logs = data.get("logs", "")
-            # Look for filenames mentioned in logs
-            match = re.search(r'[\w-]+\.py|[\w-]+\.log|[\w-]+\.txt', logs)
-            target = match.group(0) if match else "unknown"
-            return {"tool": "inspect_file", "parameters": target, "reasoning": f"Artifact {target} identified as primary threat vector. Inspecting source context to define root cause."}
+            # Scrape the specific file mentioned in the Recon feedback
+            # "Suspicious ... observed in [filename]"
+            match = re.search(r'observed in ([\w/.-]+)', recon_feedback)
+            if match:
+                target = match.group(1).strip('.')
+            else:
+                match = re.search(r'[\w-]+\.py|[\w-]+\.log|[\w-]+\.txt', logs)
+                target = match.group(0) if match else "unknown"
+            return {"tool": "inspect_file", "parameters": target, "reasoning": f"Cross-referencing telemetry suggests {target} is the primary lateral movement vector. Analyzing source."}
 
         # 4. Remediation phase
         if data.get("status") != "Mitigated":
-            return {"tool": "apply_fix", "parameters": "remediate", "reasoning": "Forensic evidence complete. Executing remediation protocol to neutralize threat and restore system integrity."}
+            return {"tool": "apply_fix", "parameters": "remediate", "reasoning": "Threat vector fully characterized. Executing emergency remediation to restore service integrity."}
         
         return None
 
