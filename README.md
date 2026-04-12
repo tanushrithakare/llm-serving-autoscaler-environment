@@ -1,159 +1,282 @@
 ---
 title: Sentinel-SOC (Forensic Env)
 emoji: 🛡️
-colorFrom: green
-colorTo: gray
+colorFrom: indigo
+colorTo: slate
 sdk: docker
 app_port: 7860
 pinned: false
-short_description: Forensic AI for Security Incident Response
+short_description: AI Security Analyst — Forensic Incident Response Environment
 tags:
-- openenv
-- security
-- forensics
-- pytorch
+  - openenv
+  - security
+  - forensics
+  - cybersecurity
+  - pytorch
 ---
 
-# Sentinel-SOC: Security Incident Analyzer 🛡️
+`sentinel_soc` is an OpenEnv-native cybersecurity forensic environment where AI agents operate as **Senior Security Analysts** autonomously investigating, identifying, and mitigating real-world security incidents via structured tool use.
 
-**Sentinel-SOC** is a high-utility, real-world forensic environment where AI agents act as **Senior Security Analysts**. Unlike basic game environments, Sentinel-SOC requires multi-step deduction, noise filtering, and obfuscation decoding to mitigate critical security threats.
+The environment follows current OpenEnv client/server conventions:
 
-## Description
-Sentinel-SOC provides a simulated Security Operations Center (SOC) where agents investigate supply-chain attacks, SQL injections, and production data leaks. The environment is designed to test the **forensic reasoning** of LLMs, forcing them to distinguish between decoy "test" data and malicious "live" payloads.
+- `SentinelSOCEnv` is the server-side environment
+- `SentinelSOCClient` is the HTTP client for remote usage
+- `inference.py` is the standard OpenEnv baseline inference runner
+- Scoring follows the **Cyber Kill Chain** methodology (Reconnaissance → Identification → Containment → Remediation)
 
-## Action Space
-Agents interact with the environment using the `IncidentAction` model:
+## Overview
 
-- **`reasoning`** (str): The analyst's internal chain-of-thought explaining the forensic logic.
-- **`tool`** (str): The forensic tool to execute. Options include:
-    - `query_logs`: Fetch system and access logs.
-    - `inspect_file`: Read the contents of a specific source file.
-    - `decode_payload`: Decode suspected malicious strings (Base64).
-    - `remediate`: Apply a patch or rotate a compromised secret.
-- **`parameters`** (str): The specific target for the tool (e.g., "access.log", "config.py", or a base64 string).
+Inside the SOC, the agent can:
 
-## Observation Space
-Agents receive an `IncidentObs` model after every step:
+- call `query_logs` to ingest raw system telemetry
+- call `extract_ioc` to identify Indicators of Compromise (IOCs)
+- call `inspect_file` to locate malicious source files
+- call `apply_fix` to remediate the confirmed threat
+- navigate ambiguous, noise-injected telemetry where decoy data competes with real signals
 
-- **`logs`** (str): Raw output from log queries or tool execution.
-- **`code_snippet`** (str): Snippets of code retrieved during inspection.
-- **`incident_thread`** (str): A summary of past actions and findings for context.
-- **`status`** (str): Current investigation state (`In Progress`, `Success`, `Failed`).
-- **`steps_remaining`** (int): How many actions are left in the budget.
-- **`reward_signal`** (float): Incremental progress score toward resolution.
+Every episode is **procedurally generated** — unique API keys, attacker IPs, C2 domains, and log timestamps are synthesized per `reset()`, making the environment non-memorizable and genuinely useful for RL training.
+
+## Current Architecture
+
+Main modules:
+
+- [`environment.py`](environment.py): procedural scenario engine, kill chain enforcement, and grading logic
+- [`models.py`](models.py): typed `IncidentAction` and `IncidentObs` Pydantic models
+- [`client.py`](client.py): synchronous HTTP client for remote usage
+- [`inference.py`](inference.py): OpenEnv-compliant baseline inference script (`[START]`/`[STEP]`/`[END]`)
+- [`server/app.py`](server/app.py): FastAPI server exposing `/reset`, `/step`, `/state`, `/grade`, `/history`
+- [`server/gradio_ui.py`](server/gradio_ui.py): Professional Gradio forensic dashboard
+- [`tests/test_environment.py`](tests/test_environment.py): 9-test validation suite
 
 ## Rewards
-- **Step cost**: -0.05 per action (incentivizes efficiency)
-- **Log investigation**: +0.10 for initial reconnaissance
-- **IOC confirmed**: +0.30 for identifying the true indicator of compromise
-- **File identified**: +0.20 for locating the root cause file
-- **Incident resolved**: +0.40 for successful remediation
-- **Wrong action penalty**: -0.10 to -0.20 for acting on decoy data
 
-## Tasks
-The environment supports three procedurally-generated scenarios. **Every `reset()` produces a unique incident** with randomized IPs, keys, domains, and filenames to prevent agent memorization.
+Rewards are structured to enforce **kill chain methodology**. Skipping phases or acting on decoy data is penalized.
 
-1. **`easy`** — Detect and contain a production secret key leak in noisy application logs
-2. **`medium`** — Identify and trace a SQL injection attack back to its source IP
-3. **`hard`** — Detect and remove an obfuscated Base64 backdoor in a vendor dependency
-
-## Key Differentiators
-
-### 🔄 Procedural Scenario Generation
-Unlike static benchmarks, every episode generates unique:
-- API keys (`sk_live_...` / `sk_test_...`)
-- Attacker IPs and domains
-- Target and decoy filenames
-- Timestamps and log ordering
-
-This makes the environment **non-memorizable** and genuinely useful for RL training.
-
-### 🎯 Cyber Kill Chain Enforcement
-The agent must follow a structured investigation path modeled on the Lockheed Martin Cyber Kill Chain:
-
-| Phase | Tool | Reward | Penalty if Skipped |
+| Phase | Tool | Condition | Reward |
 |---|---|---|---|
-| 1. Reconnaissance | `query_logs` | +0.10 | — |
-| 2. Identification | `extract_ioc` | +0.30 | -0.15 |
-| 3. Containment | `inspect_file` | +0.20 | — |
-| 4. Remediation | `apply_fix` | +0.40 | -0.15 |
+| Reconnaissance | `query_logs` | First call | `+0.10` |
+| Identification | `extract_ioc` | Correct IOC submitted | `+0.30` |
+| Containment | `inspect_file` | Correct file submitted | `+0.20` |
+| Remediation | `apply_fix` | After IOC + file confirmed | `+0.40` |
+| Step cost | any | Per action taken | `−0.05` |
+| Decoy penalty | `extract_ioc` | Wrong IOC selected | `−0.15` |
+| Skip penalty | `apply_fix` | Premature remediation | `−0.15` |
 
-### 📊 Adversarial Noise Scaling
-Difficulty tiers inject increasing amounts of irrelevant log noise:
-- **Easy**: 10% noise (clean investigation)
-- **Medium**: 30% noise (moderate misdirection)
-- **Hard**: 50% noise (heavy decoys + false alerts)
-
-### ✅ Test Suite
-```bash
-python tests/test_environment.py
-# ✔ Procedural generation verified
-# ✔ Kill chain ordering enforced
-# ✔ Grade boundaries [0.01, 0.99] compliant
-# 🏆 ALL 9 TESTS PASSED
-```
-
+Final score is clipped to `[0.01, 0.99]` for OpenEnv boundary compliance.
 
 ## Quick Start
 
-### Local Setup
-1. **Install Dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-2. **Launch Environment Server**:
-   ```bash
-   python -m uvicorn server.app:app --host 0.0.0.0 --port 7860
-   ```
-3. **Run Baseline Agent**:
-   ```bash
-   export HF_TOKEN="your_token"
-   python inference.py
-   ```
-
-## Example Usage
+### Remote (HTTP API)
 
 ```python
 import httpx
 
-SERVER = "http://localhost:7860"
+SERVER = "https://tanushri205-llm-serving-autoscaler-enviornment-server.hf.space"
 
-# 1. Reset the environment to a task
+# Reset the environment
 obs = httpx.post(f"{SERVER}/reset", params={"task": "easy"}).json()
-print(obs["logs"])          # → noisy access logs with test & live keys
-print(obs["steps_remaining"])  # → 20
+print(obs["incident_thread"])   # → live incident alert with situational report
+print(obs["logs"])              # → noisy telemetry with mixed signals
 
-# 2. Take an action — query the logs
+# Reconnaissance — query logs
 resp = httpx.post(f"{SERVER}/step", json={
-    "reasoning": "Need to scan logs for production secret keys",
+    "reasoning": "Ingesting all telemetry to identify credential anomalies",
     "tool": "query_logs",
-    "parameters": "access.log"
+    "parameters": "all"
 }).json()
-print(resp["reward"])       # → 0.10 (reconnaissance milestone)
-print(resp["done"])         # → False
+print(resp["reward"])   # → 0.10
 
-# 3. Inspect suspicious file
+# Identification — extract the IOC
 resp = httpx.post(f"{SERVER}/step", json={
-    "reasoning": "Log mentions config.py leaking sk_live key",
+    "reasoning": "sk_live_ prefix indicates production credential leak",
+    "tool": "extract_ioc",
+    "parameters": "sk_live_51M0xABcdEF67"
+}).json()
+print(resp["reward"])   # → 0.30
+
+# Containment — inspect the source file
+resp = httpx.post(f"{SERVER}/step", json={
+    "reasoning": "Credential observed in app.log — inspecting root cause",
     "tool": "inspect_file",
-    "parameters": "config.py"
+    "parameters": "app.log"
 }).json()
-print(resp["reward"])       # → 0.30 (IOC confirmed)
+print(resp["reward"])   # → 0.20
 
-# 4. Remediate
+# Remediation — apply fix
 resp = httpx.post(f"{SERVER}/step", json={
-    "reasoning": "Rotating the compromised production key",
-    "tool": "remediate",
-    "parameters": "rotate_key config.py"
+    "reasoning": "Rotating and masking all exposed production credentials",
+    "tool": "apply_fix",
+    "parameters": "remediate"
 }).json()
-print(resp["done"])         # → True
-print(resp["reward"])       # → 0.40 (incident resolved)
+print(resp["reward"])   # → 0.40
+print(resp["done"])     # → True
 
-# 5. Grade the investigation
+# Final grade
 score = httpx.post(f"{SERVER}/grade").json()
-print(score)                # → {"score": 0.95}
+print(score)            # → {"score": 0.93}
 ```
 
----
-*Developed for the Meta PyTorch Hackathon 2026 (OpenEnv).*
+### Local Usage (Direct Python)
 
+```python
+from environment import SentinelSOCEnv
+from models import IncidentAction
+
+env = SentinelSOCEnv()
+obs = env.reset(task="easy")
+
+action = IncidentAction(
+    reasoning="Ingesting raw telemetry for initial reconnaissance",
+    tool="query_logs",
+    parameters="all"
+)
+obs, reward, done, info = env.step(action)
+print(reward)               # → 0.10
+print(info["tool_result"])  # → "Log analysis complete. Credential pattern observed in..."
+
+score = env.grade()
+print(score)                # → 0.0 – 1.0
+```
+
+### Baseline Inference
+
+```bash
+export HF_TOKEN="hf_..."
+export API_BASE_URL="https://router.huggingface.co/v1"
+export MODEL_NAME="Qwen/Qwen2.5-72B-Instruct"
+
+python inference.py
+```
+
+Output follows the mandatory OpenEnv log format:
+```
+[START] task=easy env=sentinel-soc model=Qwen/Qwen2.5-72B-Instruct
+[STEP] step=1 action=query_logs(all) reward=0.10 done=false error=null
+[STEP] step=2 action=extract_ioc(sk_live_...) reward=0.30 done=false error=null
+[STEP] step=3 action=inspect_file(app.log) reward=0.20 done=false error=null
+[STEP] step=4 action=apply_fix(remediate) reward=0.40 done=true error=null
+[END] success=true steps=4 score=0.930 rewards=0.10,0.30,0.20,0.40
+```
+
+## Tasks & Scenarios
+
+Every `reset()` generates a **unique episode** — IPs, API keys, domains, filenames, and log timestamps are seeded fresh each time.
+
+| Task | Difficulty | Scenario | Noise | Max Steps |
+|---|---|---|---|---|
+| `easy` | 🟢 Tier 1 | Production secret key exposed in application logs | 10% | 10 |
+| `medium` | 🟡 Tier 2 | SQL injection attack traced to an external attacker IP | 30% | 15 |
+| `hard` | 🔴 Tier 3 | Obfuscated Base64 C2 backdoor in vendor dependency | 50% | 20 |
+
+Hard tier introduces multiple suspicious—but incorrect—domains and IPs. The agent must decode the Base64 payload embedded in source code to isolate the true C2 endpoint from decoys.
+
+## Actions and Observations
+
+### `IncidentAction`
+
+```python
+reasoning: str    # analyst chain-of-thought
+tool: str         # one of: query_logs, extract_ioc, inspect_file, apply_fix
+parameters: str   # target value (filename, IOC string, etc.)
+```
+
+### `IncidentObs`
+
+```python
+logs: str              # raw system/access/network telemetry
+code_snippet: str      # source code of relevant file
+incident_thread: str   # incident alert + situational phase report
+status: str            # current investigation status
+steps_remaining: int   # budget remaining
+reward_signal: float   # cumulative reward so far
+```
+
+## What Works Today
+
+- ✅ Procedural scenario generation (non-memorizable, seeded per episode)
+- ✅ Cyber Kill Chain enforcement with per-phase rewards and penalties
+- ✅ Adversarial noise scaling (10% / 30% / 50% by difficulty)
+- ✅ Hard task decoy ambiguity (multiple false-positive IOC candidates)
+- ✅ Neutral situational awareness — no hand-holding guidance to agents
+- ✅ Professional Gradio dashboard with 8-tab forensic analyst UI
+- ✅ Investigation Timeline, Agent Reasoning, and Evaluation panels
+- ✅ Plain-English "Explain Simply" mode for accessibility
+- ✅ OpenEnv-compliant `[START]`/`[STEP]`/`[END]` logging
+- ✅ Scores clipped to `[0.01, 0.99]` for boundary compliance
+
+## Baseline Scores
+
+Evaluation via `inference.py` with `Qwen/Qwen2.5-72B-Instruct` at `temperature=0.0`:
+
+| Task | Max Steps | Score | Status |
+|---|---|---|---|
+| `easy` | 10 | **0.93** | ✅ Mitigated in 4 steps |
+| `medium` | 15 | **0.95** | ✅ Mitigated in 4 steps |
+| `hard` | 20 | **0.96** | ✅ Mitigated in 4 steps |
+
+## Test Suite
+
+```bash
+python tests/test_environment.py
+
+# ✔ test_reset_produces_unique_scenarios PASSED
+# ✔ test_kill_chain_ordering PASSED
+# ✔ test_easy_full_solve PASSED (score: 0.93)
+# ✔ test_decoy_penalty PASSED
+# ✔ test_noise_scaling PASSED (easy: 6 lines, hard: 8 lines)
+# ✔ test_grade_boundaries PASSED (min: 0.01, max: 0.93)
+# ✔ test_all_tasks [easy] PASSED (score: 0.93)
+# ✔ test_all_tasks [medium] PASSED (score: 0.95)
+# ✔ test_all_tasks [hard] PASSED (score: 0.96)
+# 🏆 ALL TESTS PASSED
+```
+
+## Local Setup
+
+```bash
+# Clone and install
+git clone https://github.com/tanushri205/sentinel-soc.git
+cd sentinel-soc
+pip install -r requirements.txt
+
+# Run the server
+python -m uvicorn server.app:app --host 0.0.0.0 --port 7860
+
+# Or run tests directly
+python tests/test_environment.py
+```
+
+### Docker
+
+```bash
+docker build -t sentinel-soc:latest .
+docker run -p 7860:7860 \
+  -e HF_TOKEN="hf_..." \
+  -e API_BASE_URL="https://router.huggingface.co/v1" \
+  -e MODEL_NAME="Qwen/Qwen2.5-72B-Instruct" \
+  sentinel-soc:latest
+```
+
+## Environment Variables
+
+| Variable | Description | Default |
+|---|---|---|
+| `HF_TOKEN` | Hugging Face / OpenAI-compatible API key | — |
+| `API_BASE_URL` | LLM API endpoint | `https://router.huggingface.co/v1` |
+| `MODEL_NAME` | Model identifier | `Qwen/Qwen2.5-72B-Instruct` |
+| `SPACE_HOST` | Auto-set by HF Spaces for HTTPS routing | `localhost:7860` |
+
+## HTTP Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Liveness check |
+| `POST` | `/reset?task={easy\|medium\|hard}` | Start a new episode |
+| `POST` | `/step` | Execute a forensic tool action |
+| `GET` | `/state` | Current observation |
+| `GET` | `/history` | Full step history |
+| `POST` | `/grade` | Final deterministic score |
+
+---
+
+*Developed for the Meta × HuggingFace × Scaler OpenEnv Hackathon 2026.*
