@@ -229,6 +229,7 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
             "> **⚠️ LIVE INCIDENT: Potential Security Breach Detected** — "
             "System is in active investigation mode. AI Analyst is ready for tasking."
         )
+        gr.Markdown("🔍 *AI Analyst autonomously investigating using structured forensic tools and kill chain reasoning*")
         
         with gr.Row():
             # LEFT PANEL: Controls + Status
