@@ -34,13 +34,13 @@ TASKS = ["easy", "medium", "hard"]
 MAX_STEPS_MAP = {"easy": 10, "medium": 15, "hard": 20}
 SERVER_URL = "http://localhost:7860"
 
-# 2. Logging Utilities (Mandatory Format)
 def log_start(task: str, env: str, model: str) -> None:
     print(f"[START] task={task} env={env} model={model}", flush=True)
 
 def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
     error_val = error if error else "null"
-    print(f"[STEP] step={step} action={action} reward={reward:.2f} done={str(done).lower()} error={error_val}", flush=True)
+    done_val = str(done).lower()
+    print(f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}", flush=True)
 
 def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
@@ -254,15 +254,22 @@ async def run_task(client: Optional[OpenAI], task: str) -> None:
             log_step(step=step, action=f"{action.tool}({action.parameters})", reward=reward, done=done, error=None)
             if done: break
 
-        # 4. Final Deterministic Grade (Synchronized with Grader)
-        score = float(np.clip(local_env.grade(), 0.01, 0.99))
-        success = score >= 0.4
-        log_end(success=success, steps=len(rewards), score=score, rewards=rewards)
+    # 4. Final Deterministic Grade
+    score = float(np.clip(local_env.grade(), 0.0, 1.0))
+    success = score >= 0.4
+    log_end(success=success, steps=len(rewards), score=score, rewards=rewards)
 
 async def main() -> None:
+    # Use standard API behavior
     client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN) if HF_TOKEN else None
+    
+    # Run Benchmark for easy, medium, hard
     for task in TASKS:
-        await run_task(client, task)
+        try:
+            await run_task(client, task)
+        except Exception as e:
+            # Emergency end log if task crashes
+            log_end(success=False, steps=0, score=0.0, rewards=[])
 
 if __name__ == "__main__":
     asyncio.run(main())
