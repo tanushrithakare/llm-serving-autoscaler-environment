@@ -7,12 +7,12 @@ import base64
 import numpy as np
 
 CSS = """
-/* UNIVERSAL NAVY HAMMER - TARGET BOTH MODES */
+/* UNIVERSAL SOC GRADE HUD - TARGET BOTH MODES */
 :root, .dark, [data-theme='light'], [data-theme='dark'], body, html, .gradio-container {
     --body-background-fill: #020617 !important;
     --body-background-fill-dark: #020617 !important;
-    --block-background-fill: #0f172a !important;
-    --block-background-fill-dark: #0f172a !important;
+    --block-background-fill: rgba(15, 23, 42, 0.7) !important;
+    --block-background-fill-dark: rgba(15, 23, 42, 0.7) !important;
     --block-border-color: #1e293b !important;
     --input-background-fill: #020617 !important;
     --button-primary-background-fill: #22d3ee !important;
@@ -20,22 +20,36 @@ CSS = """
     --button-primary-border-color: #22d3ee !important;
     background-color: #020617 !important;
     color: #ccd6f6 !important;
+    backdrop-filter: blur(8px);
 }
 
-/* Card & HUD Refinement */
+/* Glassmorphism & Card Refinement */
 .soc-card, .hud-card {
-    background: #0f172a !important;
-    border: 1px solid #1e293b !important;
+    background: rgba(15, 23, 42, 0.8) !important;
+    border: 1px solid rgba(34, 211, 238, 0.2) !important;
     border-radius: 12px !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(34, 211, 238, 0.05) !important;
+    transition: all 0.3s ease-in-out;
 }
 
-/* Typography */
-* { font-family: 'Courier New', Courier, monospace !important; }
+.soc-card:hover {
+    border-color: rgba(34, 211, 238, 0.5) !important;
+    box-shadow: 0 4px 25px rgba(34, 211, 238, 0.15) !important;
+}
+
+/* Typography & Glows */
+* { font-family: 'Inter', 'Courier New', monospace !important; }
+h1, h2, h3 { 
+    color: #22d3ee !important; 
+    text-shadow: 0 0 10px rgba(34, 211, 238, 0.3);
+    letter-spacing: 0.05em;
+}
 
 /* Forensic Logs (Matrix Style) */
 .logs-area pre, .logs-area code, .logs-area .hljs {
     background: #000 !important;
     color: #00ff9c !important;
+    border: 1px solid #1e293b !important;
 }
 .logs-area .token.string, .logs-area .hljs-string {
     color: #ff4d4f !important;
@@ -43,12 +57,35 @@ CSS = """
 
 /* Button & Accent Overrides */
 button.primary, .primary-btn {
-    background: #22d3ee !important;
+    background: linear-gradient(135deg, #22d3ee 0%, #0891b2 100%) !important;
     color: #020617 !important;
     border: none !important;
-    font-weight: bold !important;
-    box-shadow: 0 0 15px rgba(34,211,238,0.3) !important;
+    font-weight: 800 !important;
+    text-transform: uppercase;
+    box-shadow: 0 0 15px rgba(34,211,238,0.4) !important;
+    transition: transform 0.1s ease;
 }
+button.primary:active, .primary-btn:active {
+    transform: scale(0.98);
+}
+
+/* Status Dots & Animations */
+@keyframes pulse {
+    0% { opacity: 0.6; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.1); }
+    100% { opacity: 0.6; transform: scale(1); }
+}
+.status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+    animation: pulse 2s infinite ease-in-out;
+}
+.dot-green { background: #10b981; box-shadow: 0 0 8px #10b981; }
+.dot-active { background: #22d3ee; box-shadow: 0 0 8px #22d3ee; }
+.dot-shield { background: #f43f5e; box-shadow: 0 0 8px #f43f5e; }
 """
 
 JS_FORCE_DARK = """
@@ -57,6 +94,18 @@ JS_FORCE_DARK = """
     document.body.classList.add('dark');
 }
 """
+
+THEME = gr.themes.Soft(
+    primary_hue="cyan",
+    neutral_hue="slate",
+).set(
+    body_background_fill="#020617",
+    body_background_fill_dark="#020617",
+    block_background_fill="rgba(15, 23, 42, 0.7)",
+    block_background_fill_dark="rgba(15, 23, 42, 0.7)",
+    block_border_width="1px",
+    block_title_text_color="#22d3ee"
+)
 
 def create_gradio_ui(server_url: str = "http://localhost:7860"):
 
@@ -254,20 +303,7 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
 
     # ── Build UI ─────────────────────────────────────────────────────────────
     with gr.Blocks(
-        title="Sentinel-SOC | AI Security Analyst",
-        css=CSS,
-        js=JS_FORCE_DARK,
-        theme=gr.themes.Soft(
-            primary_hue="cyan",
-            neutral_hue="slate",
-        ).set(
-            body_background_fill="#020617",
-            body_background_fill_dark="#020617",
-            block_background_fill="#0f172a",
-            block_background_fill_dark="#0f172a",
-            block_border_width="1px",
-            block_title_text_color="#22d3ee"
-        )
+        title="Sentinel-SOC | AI Security Analyst"
     ) as demo:
         # Extra inline hammer for background
         gr.HTML(f"<style>{CSS}</style>", visible=False)

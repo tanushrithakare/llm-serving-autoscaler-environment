@@ -130,9 +130,6 @@ What is your NEXT action? Follow the protocol strictly.
         thread = obs.get('incident_thread', '')
         code = obs.get('code_snippet', '')
         
-        import sys
-        print(f"[DBG] keys={list(obs.keys())} thread_len={len(thread)} thread_last50='{thread[-50:]}' recon={'No log data reviewed' in thread} ident={'Identification' in thread} contain={'Containment' in thread}", file=sys.stderr, flush=True)
-        
         # Phase detection from guidance text (matches new neutral format)
         if "No log data reviewed" in thread or ("Reconnaissance" in thread and "Suspicious" not in thread):
             return {"reasoning": "Beginning log reconnaissance.", "tool": "query_logs", "parameters": "all"}

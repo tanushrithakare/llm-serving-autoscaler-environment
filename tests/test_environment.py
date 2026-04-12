@@ -23,7 +23,7 @@ def test_reset_produces_unique_scenarios():
 
     assert seed1 != seed2, "Episode seeds must differ between resets"
     assert ioc1 != ioc2, "IOCs must differ between episodes (procedural gen)"
-    print("✔ test_reset_produces_unique_scenarios PASSED")
+    print("[OK] test_reset_produces_unique_scenarios PASSED")
 
 
 def test_kill_chain_ordering():
@@ -37,7 +37,7 @@ def test_kill_chain_ordering():
     ))
     assert reward < 0, "Premature fix should be penalized"
     assert not done, "Should not be done after premature fix"
-    print("✔ test_kill_chain_ordering PASSED")
+    print("[OK] test_kill_chain_ordering PASSED")
 
 
 def test_easy_full_solve():
@@ -72,7 +72,7 @@ def test_easy_full_solve():
 
     score = env.grade()
     assert 0.7 < score < 1.0, f"Expected high score, got {score}"
-    print(f"✔ test_easy_full_solve PASSED (score: {score})")
+    print(f"[OK] test_easy_full_solve PASSED (score: {score})")
 
 
 def test_decoy_penalty():
@@ -88,7 +88,7 @@ def test_decoy_penalty():
         reasoning="Extract", tool="extract_ioc", parameters=env.decoy_ioc
     ))
     assert reward == -0.2, f"Expected -0.2 penalty for decoy, got {reward}"
-    print("✔ test_decoy_penalty PASSED")
+    print("[OK] test_decoy_penalty PASSED")
 
 
 def test_noise_scaling():
@@ -102,7 +102,7 @@ def test_noise_scaling():
     hard_lines = len(env.logs.split("\n"))
 
     assert hard_lines >= easy_lines, f"Hard ({hard_lines} lines) should have >= noise than easy ({easy_lines} lines)"
-    print(f"✔ test_noise_scaling PASSED (easy: {easy_lines} lines, hard: {hard_lines} lines)")
+    print(f"[OK] test_noise_scaling PASSED (easy: {easy_lines} lines, hard: {hard_lines} lines)")
 
 
 def test_grade_boundaries():
@@ -122,7 +122,7 @@ def test_grade_boundaries():
     env.step(IncidentAction(reasoning="r", tool="apply_fix", parameters="fix"))
     score = env.grade()
     assert 0.01 <= score <= 0.99, f"Score {score} out of bounds"
-    print(f"✔ test_grade_boundaries PASSED (min: 0.01, max: {score})")
+    print(f"[OK] test_grade_boundaries PASSED (min: 0.01, max: {score})")
 
 
 def test_all_tasks():
@@ -142,7 +142,7 @@ def test_all_tasks():
         assert done, f"Task {task} should be solved"
         score = env.grade()
         assert score > 0.7, f"Optimal solve of {task} should score > 0.7, got {score}"
-        print(f"✔ test_all_tasks [{task}] PASSED (score: {score})")
+        print(f"[OK] test_all_tasks [{task}] PASSED (score: {score})")
 
 
 if __name__ == "__main__":
@@ -153,4 +153,4 @@ if __name__ == "__main__":
     test_noise_scaling()
     test_grade_boundaries()
     test_all_tasks()
-    print("\n🏆 ALL TESTS PASSED")
+    print("\n[FINISH] ALL TESTS PASSED")

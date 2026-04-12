@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 from environment import SentinelSOCEnv
 from models import IncidentAction, IncidentObs
 import gradio as gr
-from server.gradio_ui import create_gradio_ui
+from server.gradio_ui import create_gradio_ui, CSS, JS_FORCE_DARK, THEME
 
 app = FastAPI()
 
@@ -69,9 +69,17 @@ def get_history():
     return {"history": env.history}
 
 # --- Gradio UI Integration ---
-# For HF Spaces, internal communication should use localhost to avoid proxy/cache issues
 ui_app = create_gradio_ui(server_url="http://localhost:7860")
-app = gr.mount_gradio_app(app, ui_app, path="/")
+app = gr.mount_gradio_app(
+    app, 
+    ui_app, 
+    path="/",
+    app_kwargs={
+        "theme": THEME,
+        "css": CSS,
+        "js": JS_FORCE_DARK
+    }
+)
 
 def main():
     import uvicorn
