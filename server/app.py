@@ -84,3 +84,10 @@ def main():
 
 if __name__ == "__main__":
     main()
+import gradio as gr
+from server.gradio_ui import create_gradio_ui
+
+# Mount Gradio UI at root
+ui = create_gradio_ui(server_url="http://localhost:7860")
+app = gr.mount_gradio_app(app, ui, path="/")    
+
