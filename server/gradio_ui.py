@@ -451,6 +451,6 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
             }
             return gr.update(choices=targets.get(tool, []), value=targets.get(tool, [""])[0])
 
-        tool_dropdown.change(update_targets, inputs=[tool_dropdown], outputs=[params_input])
+        tool_dropdown.change(update_params, inputs=[tool_dropdown], outputs=[params_input])
 
     return demo
