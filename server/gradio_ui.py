@@ -255,25 +255,36 @@ def create_gradio_ui(server_url: str = "http://localhost:7860"):
                 reset_btn = gr.Button("🔄 Initialize", variant="primary", size="lg")
 
                 gr.Markdown("---")
-                gr.Markdown("### 🔧 Forensic Tools")
+                gr.Markdown("### 🤖 Agent Action Console")
+                gr.Markdown(
+                    "<small style='color:#999;'>Simulate how an AI security analyst "
+                    "selects tools and investigates artifacts step-by-step.</small>",
+                    sanitize_html=False
+                )
                 tool_dropdown = gr.Dropdown(
                     choices=["query_logs", "extract_ioc", "inspect_file", "apply_fix"],
                     value="query_logs",
-                    label="Tool"
+                    label="Action"
                 )
                 params_input = gr.Textbox(
-                    label="Parameters",
-                    placeholder="e.g. all, sk_live_..., app.log",
+                    label="Target / Value",
+                    placeholder="e.g. all  |  sk_live_...  |  app.log  |  remediate",
                     lines=1
                 )
+                gr.HTML(
+                    '<p style="font-size:0.74em; color:#888; margin:-4px 0 8px 0;">'
+                    '📂 Common targets: <code>all</code> · <code>app.log</code> · '
+                    '<code>config.py</code> · <code>vendor/auth_lib.py</code> · <code>remediate</code>'
+                    '</p>'
+                )
                 reasoning_input = gr.Textbox(
-                    label="Reasoning",
-                    placeholder="Explain your investigative logic...",
+                    label="Analyst Thought",
+                    placeholder="Explain the investigative reasoning behind this action...",
                     lines=2
                 )
-                step_btn  = gr.Button("▶️ Execute Step",    variant="secondary")
+                step_btn  = gr.Button("▶ Execute Action",        variant="secondary")
                 gr.Markdown("---")
-                grade_btn = gr.Button("📋 Finalize & Grade", variant="stop")
+                grade_btn = gr.Button("📊 Evaluate Investigation", variant="stop")
 
             # ── RIGHT: Investigation Area ────────────────────────────────────
             with gr.Column(scale=3):
