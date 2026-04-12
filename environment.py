@@ -293,9 +293,9 @@ def sync():
                 if self.task == "leak-investigation":
                     tool_result = f"Log analysis complete. Detected multiple API key references across log sources. Suspicious credential pattern observed in {self.target_file}. Both sk_test and sk_live prefixes present — determine which is production."
                 elif self.task == "sqli-detection":
-                    tool_result = f"Log analysis complete. Multiple external IPs observed making database queries. Anomalous SQL patterns detected. Cross-reference IP addresses with known threat intelligence."
+                    tool_result = f"Log analysis complete. Multiple external IPs observed making database queries. Anomalous SQL patterns detected in {self.target_file}. Cross-reference IP addresses with known threat intelligence."
                 elif self.task == "backdoor-hunt":
-                    tool_result = f"Log analysis complete. Multiple outbound connections flagged. Several domains require verification. Inspect vendor dependencies for embedded callbacks."
+                    tool_result = f"Log analysis complete. Multiple outbound connections flagged. Several domains require verification. Suspicious imports detected in {self.target_file}."
                 else:
                     tool_result = f"Logs returned for query: {params}"
                 feedback = "Log reconnaissance complete"
@@ -317,7 +317,7 @@ def sync():
                 self.found_ioc = True
                 self.kill_chain_phase = max(self.kill_chain_phase, 2)
                 reward = 0.3
-                tool_result = f"CONFIRMED: {self.target_ioc} validated as active threat indicator. Correlates with observed malicious activity."
+                tool_result = f"CONFIRMED: {self.target_ioc} validated as active threat indicator. Correlates with observed malicious activity in {self.target_file}."
                 feedback = "IOC confirmed — high confidence"
             else:
                 reward = -0.05

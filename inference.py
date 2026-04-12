@@ -25,9 +25,9 @@ from environment import SentinelSOCEnv
 from models import IncidentAction
 
 # 1. Compliance Configuration
-API_KEY = os.getenv("API_KEY") or os.getenv("HF_TOKEN")
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
 MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
+HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 BENCHMARK = "sentinel-soc"
 
 TASKS = ["easy", "medium", "hard"]
@@ -124,29 +124,70 @@ What is your NEXT action? Follow the protocol strictly.
         data.setdefault("parameters", "all")
 
         return data
-    except Exception:
-        # Heuristic Fallback Analyst (Guidance-Synchronized)
-        incident_thread = obs.get('incident_thread', '')
+    except Exception as _e:
+        # Heuristic Fallback Analyst — works with procedural scenarios
+        logs = obs.get('logs', '')
+        thread = obs.get('incident_thread', '')
+        code = obs.get('code_snippet', '')
         
-        # Determine Task Context
-        if "sk_live" in obs.get('logs', '') or "leak-investigation" in incident_thread:
-            ioc, file, fix = "sk_live_51M0x2L9ABcdEF67890", "app.log", "rotate_and_mask"
-        elif "192.168" in obs.get('logs', ''):
-            ioc, file, fix = "192.168.1.137", "db_utils.py", "patch"
-        else:
-            ioc, file, fix = "attacker-domain.cc", "vendor/auth_lib.py", "remove_backdoor"
-
-        # Direct Guidance-to-Action Mapping
-        if "Call query_logs" in incident_thread:
-            return {"reasoning": "Standard recon started.", "tool": "query_logs", "parameters": "all"}
-        if "Call extract_ioc" in incident_thread:
-            return {"reasoning": "Guidance: Extracting confirmed IOC.", "tool": "extract_ioc", "parameters": ioc}
-        if "Call inspect_file" in incident_thread:
-            return {"reasoning": "Guidance: Inspecting root cause file.", "tool": "inspect_file", "parameters": file}
-        if "Call apply_fix" in incident_thread:
-            return {"reasoning": "Guidance: Final mitigation.", "tool": "apply_fix", "parameters": fix}
+        import sys
+        print(f"[DBG] keys={list(obs.keys())} thread_len={len(thread)} thread_last50='{thread[-50:]}' recon={'No log data reviewed' in thread} ident={'Identification' in thread} contain={'Containment' in thread}", file=sys.stderr, flush=True)
+        
+        # Phase detection from guidance text (matches new neutral format)
+        if "No log data reviewed" in thread or ("Reconnaissance" in thread and "Suspicious" not in thread):
+            return {"reasoning": "Beginning log reconnaissance.", "tool": "query_logs", "parameters": "all"}
+        
+        if "ready for remediation" in thread.lower() or ("IOC verified" in thread and "Root cause identified" in thread):
+            return {"reasoning": "All evidence collected. Applying remediation.", "tool": "apply_fix", "parameters": "remediate"}
+        
+        # Extract IOC dynamically from logs
+        if "Suspicious indicators" in thread or "Identification" in thread:
+            # Try to find sk_live key
+            sk_match = re.search(r'(sk_live_[A-Za-z0-9]+)', logs)
+            if sk_match:
+                return {"reasoning": f"Found production key: {sk_match.group(1)}", "tool": "extract_ioc", "parameters": sk_match.group(1)}
             
-        return {"reasoning": "Protocol standby.", "tool": "query_logs", "parameters": "status"}
+            # Try to find UNAUTHORIZED IP
+            ip_match = re.findall(r'(\d+\.\d+\.\d+\.\d+).*?(?:UNION|SELECT|DROP|INSERT|injection)', logs, re.IGNORECASE)
+            if ip_match:
+                return {"reasoning": f"SQL injection source: {ip_match[0]}", "tool": "extract_ioc", "parameters": ip_match[0]}
+            
+            # Try to find unauthorized domain
+            domain_match = re.search(r'-> ([\w.-]+\.(?:cc|ru|xyz|tk|onion|io|biz|net)):\d+ \(UNAUTHORIZED\)', logs)
+            if domain_match:
+                return {"reasoning": f"Unauthorized egress: {domain_match.group(1)}", "tool": "extract_ioc", "parameters": domain_match.group(1)}
+            
+            # Fallback: extract any suspicious external IP
+            all_ips = re.findall(r'(\d+\.\d+\.\d+\.\d+)', logs)
+            external = [ip for ip in all_ips if not ip.startswith(('10.', '172.16.', '192.168.'))]
+            if external:
+                return {"reasoning": f"Investigating external IP: {external[0]}", "tool": "extract_ioc", "parameters": external[0]}
+        
+        # Find source file from logs/code/tool_result
+        if "Source file not yet isolated" in thread or "Containment" in thread:
+            # Search ALL available text for filenames
+            all_text = f"{logs}\n{code}\n{thread}\n{last_tool_result}"
+            
+            # Extract filenames from log brackets like [app.log]: or [server.log]:
+            file_matches = re.findall(r'CRITICAL \[([\w./]+)\]', logs)
+            if file_matches:
+                return {"reasoning": f"Inspecting critical source: {file_matches[0]}", "tool": "inspect_file", "parameters": file_matches[0]}
+            
+            # Check for vendor files in code snippet
+            vendor_match = re.search(r'# (vendor/[\w.]+)', code)
+            if vendor_match:
+                return {"reasoning": f"Inspecting vendor dependency: {vendor_match.group(1)}", "tool": "inspect_file", "parameters": vendor_match.group(1)}
+            
+            # Search all text for Python files or log files
+            file_candidates = re.findall(r'(?:vendor/)?[\w]+\.(?:py|log)', all_text)
+            # Filter common non-target files
+            excluded = {'inference.py', 'models.py', 'grader.py', 'environment.py', 'baseline.py', 'gradio_ui.py', 'app.py'}
+            file_candidates = [f for f in file_candidates if f not in excluded]
+            if file_candidates:
+                return {"reasoning": f"File mentioned in investigation: {file_candidates[0]}", "tool": "inspect_file", "parameters": file_candidates[0]}
+        
+        # Default: start investigation
+        return {"reasoning": "Initiating reconnaissance.", "tool": "query_logs", "parameters": "all"}
 
 # 4. Task Execution Engine
 async def run_task(client: Optional[OpenAI], task: str) -> None:
@@ -219,7 +260,7 @@ async def run_task(client: Optional[OpenAI], task: str) -> None:
         log_end(success=success, steps=len(rewards), score=score, rewards=rewards)
 
 async def main() -> None:
-    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY) if API_KEY else None
+    client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN) if HF_TOKEN else None
     for task in TASKS:
         await run_task(client, task)
 
