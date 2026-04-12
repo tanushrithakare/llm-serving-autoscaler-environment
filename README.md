@@ -2,7 +2,7 @@
 title: Sentinel-SOC (Forensic Env)
 emoji: 🛡️
 colorFrom: indigo
-colorTo: slate
+colorTo: gray
 sdk: docker
 app_port: 7860
 pinned: false
@@ -15,7 +15,9 @@ tags:
   - pytorch
 ---
 
-`sentinel_soc` is an OpenEnv-native cybersecurity forensic environment where AI agents operate as **Senior Security Analysts** autonomously investigating, identifying, and mitigating real-world security incidents via structured tool use.
+**Sentinel-SOC** is an AI-powered Security Operations Center where LLM agents act as autonomous security analysts — investigating, reasoning through adversarial noise, and mitigating real-world cyber threats using structured forensic tools.
+
+Unlike traditional benchmarks that only evaluate whether an agent reaches the correct answer, Sentinel-SOC evaluates **how** the agent reasons: every tool call, every decision, and every mistake is tracked, scored, and explainable.
 
 The environment follows current OpenEnv client/server conventions:
 
@@ -35,6 +37,34 @@ Inside the SOC, the agent can:
 - navigate ambiguous, noise-injected telemetry where decoy data competes with real signals
 
 Every episode is **procedurally generated** — unique API keys, attacker IPs, C2 domains, and log timestamps are synthesized per `reset()`, making the environment non-memorizable and genuinely useful for RL training.
+
+## Why Sentinel-SOC Matters
+
+Traditional benchmarks evaluate whether an agent reaches the correct answer.
+
+Sentinel-SOC goes further:
+
+- Evaluates **how** the agent reasons — not just outcomes
+- Simulates **real SOC workflows** with multi-step forensic methodology
+- Introduces **adversarial noise and decoy IOCs** to force genuine deduction
+- Enforces **structured investigation** via Cyber Kill Chain phase gating
+- Produces **fully auditable traces** — every decision is logged, scored, and diagnosable
+
+This makes it suitable for **training, evaluating, and debugging AI systems** intended for real-world security operations — a use case with direct industry relevance.
+
+## Key Innovation
+
+Sentinel-SOC is not just an evaluation environment.
+
+It is an **auditable intelligence system** where:
+
+- Every agent decision is tracked and logged
+- Every reasoning step is surfaced in the UI
+- Every failure mode is attributable to a specific kill chain phase
+
+This enables not only benchmark scoring, but also **training signal generation and failure diagnosis for AI security analysts** — closing the gap between academic RL environments and deployable SOC tooling.
+
+This makes Sentinel-SOC not only a benchmark, but a **debugging tool for agent reasoning failures**.
 
 ## Current Architecture
 
@@ -168,7 +198,15 @@ Every `reset()` generates a **unique episode** — IPs, API keys, domains, filen
 | `medium` | 🟡 Tier 2 | SQL injection attack traced to an external attacker IP | 30% | 15 |
 | `hard` | 🔴 Tier 3 | Obfuscated Base64 C2 backdoor in vendor dependency | 50% | 20 |
 
-Hard tier introduces multiple suspicious—but incorrect—domains and IPs. The agent must decode the Base64 payload embedded in source code to isolate the true C2 endpoint from decoys.
+Hard tier introduces multiple suspicious—but incorrect—domains and IPs alongside the real C2 callback. The agent must reason through a **multi-step deduction chain**:
+
+1. Identify suspicious outbound network traffic in noisy telemetry
+2. Inspect obfuscated vendor source code containing a Base64-encoded payload
+3. Decode the payload to reveal the embedded C2 domain
+4. Correlate the decoded domain against observed UNAUTHORIZED network connections
+5. Distinguish the true C2 from decoy domains that appear in both logs and code
+
+Single-step heuristics and pattern-matching fail in this scenario. The agent must perform genuine multi-source deductive reasoning.
 
 ## Actions and Observations
 
@@ -278,5 +316,7 @@ docker run -p 7860:7860 \
 | `POST` | `/grade` | Final deterministic score |
 
 ---
+
+Sentinel-SOC demonstrates how LLMs can transition from passive assistants to **active, auditable security analysts** — reducing mean time to detection, enforcing structured investigation methodology, and making AI-driven incident response transparent and trustworthy.
 
 *Developed for the Meta × HuggingFace × Scaler OpenEnv Hackathon 2026.*
