@@ -73,5 +73,49 @@ The environment currently supports three distinct scenarios:
    python inference.py
    ```
 
+## Example Usage
+
+```python
+import httpx
+
+SERVER = "http://localhost:7860"
+
+# 1. Reset the environment to a task
+obs = httpx.post(f"{SERVER}/reset", params={"task": "easy"}).json()
+print(obs["logs"])          # → noisy access logs with test & live keys
+print(obs["steps_remaining"])  # → 20
+
+# 2. Take an action — query the logs
+resp = httpx.post(f"{SERVER}/step", json={
+    "reasoning": "Need to scan logs for production secret keys",
+    "tool": "query_logs",
+    "parameters": "access.log"
+}).json()
+print(resp["reward"])       # → 0.10 (reconnaissance milestone)
+print(resp["done"])         # → False
+
+# 3. Inspect suspicious file
+resp = httpx.post(f"{SERVER}/step", json={
+    "reasoning": "Log mentions config.py leaking sk_live key",
+    "tool": "inspect_file",
+    "parameters": "config.py"
+}).json()
+print(resp["reward"])       # → 0.30 (IOC confirmed)
+
+# 4. Remediate
+resp = httpx.post(f"{SERVER}/step", json={
+    "reasoning": "Rotating the compromised production key",
+    "tool": "remediate",
+    "parameters": "rotate_key config.py"
+}).json()
+print(resp["done"])         # → True
+print(resp["reward"])       # → 0.40 (incident resolved)
+
+# 5. Grade the investigation
+score = httpx.post(f"{SERVER}/grade").json()
+print(score)                # → {"score": 0.95}
+```
+
 ---
 *Developed for the Meta PyTorch Hackathon 2026 (OpenEnv).*
+
