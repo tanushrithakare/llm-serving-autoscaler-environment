@@ -2,11 +2,11 @@
 title: Sentinel-SOC (Forensic Env)
 emoji: 🛡️
 colorFrom: green
-colorTo: slate
+colorTo: gray
 sdk: docker
 app_port: 7860
 pinned: false
-short_description: High-fidelity forensic environment for security incident response.
+short_description: Forensic AI for Security Incident Response
 tags:
 - openenv
 - security
@@ -43,17 +43,18 @@ Agents receive an `IncidentObs` model after every step:
 - **`reward_signal`** (float): Incremental progress score toward resolution.
 
 ## Rewards
-The environment uses a **Forensic Efficiency Rubric**:
-- **Step Cost**: -0.05 per action (incentivizes speed).
-- **Milestone Reward**: +0.2 for identifying a true IOC (Indicator of Compromise).
-- **Final Reward**: +1.0 for successful remediation of the root cause.
-- **Failure Penalty**: -1.0 for applying the wrong fix or exhausting the budget.
+- **Step cost**: -0.05 per action (incentivizes efficiency)
+- **Log investigation**: +0.10 for initial reconnaissance
+- **IOC confirmed**: +0.30 for identifying the true indicator of compromise
+- **File identified**: +0.20 for locating the root cause file
+- **Incident resolved**: +0.40 for successful remediation
+- **Wrong action penalty**: -0.10 to -0.20 for acting on decoy data
 
 ## Tasks
 The environment currently supports three distinct scenarios:
-1. **`leak-investigation` (Easy)**: Distinguish between test and production keys in noisy logs.
-2. **`sqli-detection` (Medium)**: Identify SQL injection patterns and trace back to an internal IP.
-3. **`backdoor-hunt` (Hard)**: Detect obfuscated Base64 backdoors in vendor dependencies.
+1. **`easy`** — Detect and contain a production secret key leak in noisy application logs
+2. **`medium`** — Identify and trace a SQL injection attack back to its source IP
+3. **`hard`** — Detect and remove an obfuscated Base64 backdoor in a vendor dependency
 
 ## Quick Start
 
