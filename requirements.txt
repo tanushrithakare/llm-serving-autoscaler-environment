@@ -1,10 +1,10 @@
-fastapi==0.110.0
-uvicorn==0.27.1
-pydantic==2.6.3
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.6.3
 openai>=2.7.2
-numpy==1.26.4
-python-dotenv==1.0.1
+numpy>=1.26.4
+python-dotenv>=1.0.1
 httpx>=0.28.1
-python-multipart==0.0.9
+python-multipart>=0.0.9
 gradio>=4.0.0
 openenv-core[core]>=0.2.2
