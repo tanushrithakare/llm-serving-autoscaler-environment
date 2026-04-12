@@ -148,32 +148,38 @@ class SentinelSOCEnv:
             user = rng.choice(_USERNAMES)
             
             self.incident_thread = (
-                f"[ALERT] Automated scanner detected 'sk_live' pattern in production logs!"
+                f"[CRITICAL INCIDENT] Production secret exposure reported by automated credential scanner.\n"
+                f"Severity: HIGH | Reporter: SecOps Monitoring | Assigned: Tier-2 Analyst\n"
+                f"Multiple API keys detected in application output. Determine which are production credentials."
             )
             
-            # Build signal log lines
             signal_lines = [
-                f"{_random_ts(base_ts, 1)} DEBUG [{self.target_file}]: [DECOY] Initializing Test Suite with {self.decoy_ioc}",
-                f"{_random_ts(base_ts, 2)} CRITICAL [{self.target_file}]: [LEAK] Production client initialized with: {self.target_ioc}",
-                f"{_random_ts(base_ts, 3)} WARNING [{self.decoy_file}]: recent modification by '{user}'"
+                f"{_random_ts(base_ts, 1)} DEBUG [{self.target_file}]: Test suite initialized with key {self.decoy_ioc}",
+                f"{_random_ts(base_ts, 2)} CRITICAL [{self.target_file}]: Client SDK initialized — credential: {self.target_ioc}",
+                f"{_random_ts(base_ts, 3)} WARNING [{self.decoy_file}]: File modified by '{user}' — review recommended",
+                f"{_random_ts(base_ts, 4)} INFO [deploy]: Deployment pipeline triggered by {user}",
             ]
             
-            # Mix in noise
-            noise_count = max(1, int(len(signal_lines) / (1 - noise_ratio) * noise_ratio))
+            noise_count = max(2, int(len(signal_lines) / (1 - noise_ratio) * noise_ratio))
             noise_lines = _generate_noise(noise_count, base_ts)
             
             all_lines = noise_lines + signal_lines
             rng.shuffle(all_lines)
             self.logs = "\n".join(all_lines)
-            self.code_snippet = f"# {self.decoy_file}\nDEBUG = True\n# TODO: Move keys to env vars"
+            self.code_snippet = f"# {self.decoy_file}\nDEBUG = True\nAPI_KEY = os.getenv('API_KEY', 'not_set')\n# TODO: audit credential handling"
         
         elif self.task == "sqli-detection":
             self.target_file = rng.choice(_FILE_NAMES["sqli"])
             self.decoy_file = rng.choice(_DECOY_FILES["sqli"])
             self.target_ioc = _random_ip(internal=False)
             self.decoy_ioc = _random_ip(internal=True)
+            extra_suspect = _random_ip(internal=False)
             
-            self.incident_thread = f"[ALERT] Unusual database query volume detected from {self.target_ioc}."
+            self.incident_thread = (
+                f"[CRITICAL INCIDENT] Database anomaly detected by query profiler.\n"
+                f"Severity: HIGH | Reporter: DB Monitoring Agent | Assigned: Tier-2 Analyst\n"
+                f"Unusual query patterns observed. Multiple external IPs flagged. Investigate and isolate source."
+            )
             
             sqli_payload = rng.choice([
                 "' UNION SELECT credit_card FROM users --",
@@ -184,34 +190,42 @@ class SentinelSOCEnv:
             
             signal_lines = [
                 f"{self.decoy_ioc} - - [{_random_ts(base_ts, 1)}] 'GET /health HTTP/1.1' 200",
-                f"{self.target_ioc} - - [{_random_ts(base_ts, 5)}] 'GET /user?id=1{sqli_payload} HTTP/1.1' 200"
+                f"{self.target_ioc} - - [{_random_ts(base_ts, 5)}] 'GET /user?id=1{sqli_payload} HTTP/1.1' 200",
+                f"{extra_suspect} - - [{_random_ts(base_ts, 3)}] 'POST /api/login HTTP/1.1' 401",
+                f"{extra_suspect} - - [{_random_ts(base_ts, 4)}] 'POST /api/login HTTP/1.1' 401",
             ]
             
-            noise_count = max(1, int(len(signal_lines) / (1 - noise_ratio) * noise_ratio))
+            noise_count = max(2, int(len(signal_lines) / (1 - noise_ratio) * noise_ratio))
             noise_lines = _generate_noise(noise_count, base_ts)
             all_lines = noise_lines + signal_lines
             rng.shuffle(all_lines)
             self.logs = "\n".join(all_lines)
-            self.code_snippet = f"def get_user(id):\n    # POTENTIALLY VULNERABLE\n    return db.execute(f'SELECT * FROM users WHERE id={{id}}')"
+            self.code_snippet = f"def get_user(id):\n    # WARNING: unsanitized input\n    return db.execute(f'SELECT * FROM users WHERE id={{id}}')"
 
         elif self.task == "backdoor-hunt":
             self.target_file = rng.choice(_FILE_NAMES["backdoor"])
             self.decoy_file = rng.choice(_DECOY_FILES["backdoor"])
             self.target_ioc = rng.choice(_DOMAINS)
             self.decoy_ioc = rng.choice(_SAFE_DOMAINS)
+            # Add extra suspicious (but safe) domains for ambiguity
+            extra_suspicious = rng.choice([d for d in _DOMAINS if d != self.target_ioc])
             internal_ip = f"172.16.{rng.randint(0,255)}.{rng.randint(1,254)}"
             
-            self.incident_thread = "[CRITICAL] Unauthorized egress detected to unknown endpoint."
+            self.incident_thread = (
+                f"[CRITICAL INCIDENT] Unauthorized network egress detected by perimeter firewall.\n"
+                f"Severity: CRITICAL | Reporter: Network IDS | Assigned: Tier-3 Analyst\n"
+                f"Multiple outbound connections to unrecognized domains. Possible C2 callback or data exfiltration."
+            )
             
             signal_lines = [
                 f"NETWORK: {internal_ip} -> {self.decoy_ioc}:443 (Authorized)",
-                f"NETWORK: {internal_ip} -> {self.target_ioc}:443 (UNAUTHORIZED)"
+                f"NETWORK: {internal_ip} -> {self.target_ioc}:443 (UNAUTHORIZED)",
+                f"NETWORK: {internal_ip} -> {extra_suspicious}:8080 (BLOCKED)",
             ]
             
-            noise_count = max(2, int(len(signal_lines) / (1 - noise_ratio) * noise_ratio))
+            noise_count = max(3, int(len(signal_lines) / (1 - noise_ratio) * noise_ratio))
             noise_lines = _generate_noise(noise_count, base_ts)
-            # Add extra decoy network connections for hard mode
-            for _ in range(rng.randint(1, 3)):
+            for _ in range(rng.randint(2, 4)):
                 safe = rng.choice(_SAFE_DOMAINS)
                 noise_lines.append(f"NETWORK: {internal_ip} -> {safe}:443 (Authorized)")
             
@@ -229,26 +243,26 @@ def sync():
 """
 
     def _get_obs(self) -> IncidentObs:
-        # Build explicit next-step guidance based on kill chain phase
+        # Neutral situational awareness — no hand-holding
         phase_names = ["Reconnaissance", "Identification", "Containment", "Remediation", "Complete"]
         
         if not self.has_queried:
-            guidance = f"[Kill Chain Phase: {phase_names[0]}] NEXT STEP: Call query_logs to begin investigation."
+            guidance = f"[Phase: {phase_names[0]}] No log data reviewed yet. Raw telemetry available for analysis."
         elif not self.found_ioc and not self.found_file:
-            guidance = f"[Kill Chain Phase: {phase_names[1]}] NEXT STEP: Call extract_ioc with the suspicious indicator found in logs, OR call inspect_file with a suspicious filename."
+            guidance = f"[Phase: {phase_names[1]}] Suspicious indicators detected in logs. Further correlation required."
         elif self.found_ioc and not self.found_file:
-            guidance = f"[Kill Chain Phase: {phase_names[2]}] IOC CONFIRMED. NEXT STEP: Call inspect_file to identify the root cause file."
+            guidance = f"[Phase: {phase_names[2]}] IOC confirmed with high confidence. Source file not yet isolated."
         elif self.found_file and not self.found_ioc:
-            guidance = f"[Kill Chain Phase: {phase_names[2]}] FILE IDENTIFIED. NEXT STEP: Call extract_ioc to confirm the indicator of compromise."
+            guidance = f"[Phase: {phase_names[2]}] Suspicious source file located. Indicator of compromise not yet verified."
         elif self.found_file and self.found_ioc:
-            guidance = f"[Kill Chain Phase: {phase_names[3]}] BOTH IOC AND FILE CONFIRMED. NEXT STEP: Call apply_fix to resolve the incident."
+            guidance = f"[Phase: {phase_names[3]}] Root cause identified and IOC verified. Incident ready for remediation."
         else:
-            guidance = f"[Kill Chain Phase: {phase_names[4]}] Investigation complete."
+            guidance = f"[Phase: {phase_names[4]}] Investigation complete. All kill chain phases resolved."
 
         return IncidentObs(
             logs=self.logs,
             code_snippet=self.code_snippet,
-            incident_thread=self.incident_thread + f"\n\n[ANALYST SYSTEM]: {guidance}",
+            incident_thread=self.incident_thread + f"\n\n[SITUATION REPORT]: {guidance}",
             status=self.status,
             steps_remaining=self.max_steps - self.steps_taken,
             reward_signal=float(round(self.reward_total, 2))
@@ -270,80 +284,83 @@ def sync():
         if tool == "query_logs":
             if self.has_queried:
                 reward = -0.05
-                tool_result = "WARNING: Logs already analyzed. No new information. Proceed to extract_ioc or inspect_file."
-                feedback = "✖ Redundant Reconnaissance"
+                tool_result = "NOTICE: Log corpus already ingested. No additional telemetry available."
+                feedback = "Redundant log query"
             else:
                 self.has_queried = True
                 self.kill_chain_phase = 1
                 reward = 0.1
                 if self.task == "leak-investigation":
-                    tool_result = f"Logs analyzed. Found suspicious pattern: sk_live key in {self.target_file}. Recommend: extract_ioc with '{self.target_ioc}' and inspect_file with '{self.target_file}'"
+                    tool_result = f"Log analysis complete. Detected multiple API key references across log sources. Suspicious credential pattern observed in {self.target_file}. Both sk_test and sk_live prefixes present — determine which is production."
                 elif self.task == "sqli-detection":
-                    tool_result = f"Logs analyzed. Found SQL injection attempt from IP {self.target_ioc} targeting {self.target_file}. Recommend: extract_ioc with '{self.target_ioc}' and inspect_file with '{self.target_file}'"
+                    tool_result = f"Log analysis complete. Multiple external IPs observed making database queries. Anomalous SQL patterns detected. Cross-reference IP addresses with known threat intelligence."
                 elif self.task == "backdoor-hunt":
-                    tool_result = f"Logs analyzed. Found unauthorized egress to {self.target_ioc} originating from {self.target_file}. Recommend: extract_ioc with '{self.target_ioc}' and inspect_file with '{self.target_file}'"
+                    tool_result = f"Log analysis complete. Multiple outbound connections flagged. Several domains require verification. Inspect vendor dependencies for embedded callbacks."
                 else:
                     tool_result = f"Logs returned for query: {params}"
-                feedback = "✔ Reconnaissance complete"
+                feedback = "Log reconnaissance complete"
             
         elif tool == "extract_ioc":
             if not self.has_queried:
                 reward = -0.15
-                tool_result = "REJECTED: Must investigate logs for clues before extraction."
-                feedback = "✖ Skipped Reconnaissance phase"
+                tool_result = "REJECTED: No log data available. Conduct reconnaissance first."
+                feedback = "Extraction attempted without reconnaissance"
             elif self.found_ioc:
                 reward = -0.05
-                tool_result = "INFO: Indicator of Compromise already confirmed. Do not repeat."
-                feedback = "✖ Redundant IOC extraction"
+                tool_result = "NOTICE: This indicator has already been validated and catalogued."
+                feedback = "Duplicate IOC extraction"
             elif params == self.decoy_ioc.lower():
                 reward = -0.2
-                tool_result = f"WARNING: {params} is a known SAFE or DECOY indicator. Do not escalate."
-                feedback = "✖ Fell for decoy indicator"
+                tool_result = f"ANALYSIS: {params} matches known benign/test infrastructure. Not a valid threat indicator."
+                feedback = "Decoy indicator selected"
             elif self.target_ioc.lower() in params:
                 self.found_ioc = True
                 self.kill_chain_phase = max(self.kill_chain_phase, 2)
                 reward = 0.3
-                tool_result = f"SUCCESS: IOC {self.target_ioc} confirmed! NEXT STEP: Identify the root cause file using 'inspect_file' and then 'apply_fix'."
-                feedback = "✔ IOC confirmed — high confidence"
+                tool_result = f"CONFIRMED: {self.target_ioc} validated as active threat indicator. Correlates with observed malicious activity."
+                feedback = "IOC confirmed — high confidence"
             else:
                 reward = -0.05
-                tool_result = f"FAILURE: Indicator {params} not confirmed in dataset."
-                feedback = "✖ Potential false positive"
+                tool_result = f"ANALYSIS: {params} does not correlate with observed threat patterns."
+                feedback = "Unverified indicator"
 
         elif tool == "inspect_file":
             if params == self.decoy_file.lower():
                 reward = -0.05
-                tool_result = f"RED HERRING: {params} shows suspicious activity but is not the root cause."
-                feedback = "✖ Investigated decoy file"
+                tool_result = f"ANALYSIS: {params} contains routine configuration. No malicious artifacts detected despite suspicious modification history."
+                feedback = "Benign file inspected"
             elif params == self.target_file.lower():
                 self.found_file = True
                 self.kill_chain_phase = max(self.kill_chain_phase, 3)
                 reward = 0.2
-                tool_result = f"CRITICAL: Resource {self.target_file} identified as exploit source. NEXT STEP: If IOC is also confirmed, call 'apply_fix' to close the incident."
-                feedback = "✔ Root cause file identified"
+                tool_result = f"CRITICAL: {self.target_file} contains code patterns consistent with the observed threat. Exploit origin confirmed."
+                feedback = "Root cause file identified"
             else:
                 reward = -0.05
-                tool_result = f"INFO: No proof of compromise in {params}."
-                feedback = "✖ No malicious artifacts found"
+                tool_result = f"ANALYSIS: {params} — no indicators of compromise found in this resource."
+                feedback = "Clean file"
 
         elif tool == "apply_fix":
             if self.found_file and self.found_ioc:
                 self.mitigated = True
                 self.kill_chain_phase = 4
-                self.status = "Mitigation Active"
+                self.status = "Mitigated"
                 reward = 0.4
-                tool_result = "SUCCESS: Incident mitigated. Monitoring for recurrence."
-                feedback = "✔ Kill chain complete — incident resolved"
+                tool_result = "RESOLVED: Remediation applied. Threat neutralized. Continuous monitoring initiated."
+                feedback = "Incident resolved — kill chain complete"
                 done = True
             else:
                 reward = -0.15
-                tool_result = "REJECTED: Cannot fix. Requires verified File and IOC first."
-                feedback = "✖ Premature remediation — kill chain incomplete"
+                missing = []
+                if not self.found_ioc: missing.append("IOC")
+                if not self.found_file: missing.append("source file")
+                tool_result = f"REJECTED: Insufficient evidence for remediation. Missing: {', '.join(missing)}."
+                feedback = "Premature remediation attempt"
         
         else:
             reward = -0.1
-            tool_result = f"Invalid tool: {tool}"
-            feedback = "✖ Unknown forensic tool"
+            tool_result = f"REJECTED: '{tool}' is not a recognized forensic tool."
+            feedback = "Invalid tool"
 
         self.reward_total += reward
         
