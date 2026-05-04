@@ -1,6 +1,10 @@
 import sys
 import os
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 # Ensure project root (one level up) is in path
 root_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if root_path not in sys.path:
@@ -16,15 +20,15 @@ from server.gradio_ui import create_gradio_ui, CSS, JS_FORCE_DARK, THEME
 
 app = FastAPI()
 
-# Singleton environment instance
-_env_instance = None
+# Per-request environment storage (prevents state sharing between concurrent requests)
+_env_instances = {}  # Maps session_id to environment
 
 
-def get_env(task: str = "leak-investigation"):
-    global _env_instance
-    if _env_instance is None:
-        _env_instance = SentinelSOCEnv()
-    return _env_instance
+def get_or_create_env(session_id: str = "default") -> SentinelSOCEnv:
+    """Get or create environment instance for this session."""
+    if session_id not in _env_instances:
+        _env_instances[session_id] = SentinelSOCEnv()
+    return _env_instances[session_id]
 
 
 @app.get("/health")
@@ -34,13 +38,15 @@ def health():
 
 @app.post("/reset", response_model=IncidentObs)
 def reset(task: str = Query("easy", enum=["easy", "medium", "hard"])):
-    env = get_env(task)
+    # Create fresh environment for this reset (prevents state sharing between concurrent users)
+    env = SentinelSOCEnv()
+    _env_instances["default"] = env
     return env.reset(task=task)
 
 
 @app.post("/step")
 def step(action: IncidentAction):
-    env = get_env()
+    env = get_or_create_env()
     obs, reward, done, info = env.step(action)
     return {
         "observation": obs,
@@ -52,20 +58,20 @@ def step(action: IncidentAction):
 
 @app.get("/state", response_model=IncidentObs)
 def state():
-    env = get_env()
+    env = get_or_create_env()
     return env._get_obs()
 
 
 @app.post("/grade")
 def grade():
-    env = get_env()
+    env = get_or_create_env()
     score = env.grade()
     return {"score": score}
 
 
 @app.get("/history")
 def get_history():
-    env = get_env()
+    env = get_or_create_env()
     return {"history": env.history}
 
 # --- Gradio UI Integration ---
