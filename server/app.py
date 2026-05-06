@@ -78,7 +78,7 @@ def get_history():
 @app.get("/analytics", response_model=AnalyticsReport)
 def analytics():
     """Return a structured analytics report for the current investigation session."""
-    env = get_env()
+    env = get_or_create_env()
     history = env.history
 
     # Kill chain phase completion map
