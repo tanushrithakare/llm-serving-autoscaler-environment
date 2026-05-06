@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from environment import SentinelSOCEnv
-from models import IncidentAction, IncidentObs
+from models import IncidentAction, IncidentObs, AnalyticsReport, KillChainPhaseStats
 import gradio as gr
 from server.gradio_ui import create_gradio_ui, CSS, JS_FORCE_DARK, THEME
 
@@ -73,6 +73,62 @@ def grade():
 def get_history():
     env = get_or_create_env()
     return {"history": env.history}
+
+
+@app.get("/analytics", response_model=AnalyticsReport)
+def analytics():
+    """Return a structured analytics report for the current investigation session."""
+    env = get_env()
+    history = env.history
+
+    # Kill chain phase completion map
+    PHASE_TOOL_MAP = [
+        ("Reconnaissance",  "query_logs",   0.10),
+        ("Identification",  "extract_ioc",  0.30),
+        ("Containment",     "inspect_file", 0.20),
+        ("Remediation",     "apply_fix",    0.40),
+    ]
+    phase_stats: list[KillChainPhaseStats] = []
+    for phase_name, tool_name, max_reward in PHASE_TOOL_MAP:
+        earned = next(
+            (h["reward"] for h in history if h["tool"] == tool_name and h["reward"] > 0),
+            0.0,
+        )
+        phase_stats.append(
+            KillChainPhaseStats(
+                phase=phase_name,
+                completed=earned > 0,
+                tool_used=tool_name,
+                reward_earned=round(earned, 2),
+            )
+        )
+
+    total_steps = len(history)
+    successful_steps = sum(1 for h in history if h["reward"] > 0)
+    total_reward = round(sum(h["reward"] for h in history), 3)
+    efficiency_score = round(total_reward / total_steps, 4) if total_steps > 0 else 0.0
+    success_rate = round(successful_steps / total_steps, 4) if total_steps > 0 else 0.0
+
+    # Per-tool call counts
+    action_breakdown: dict[str, int] = {}
+    for h in history:
+        action_breakdown[h["tool"]] = action_breakdown.get(h["tool"], 0) + 1
+
+    # Final grade only when the episode is done
+    final_grade = round(env.grade(), 3) if (env.mitigated or env.steps_taken >= env.max_steps) else None
+
+    return AnalyticsReport(
+        task=env.task,
+        total_steps=total_steps,
+        steps_remaining=env.max_steps - env.steps_taken,
+        kill_chain_phases=phase_stats,
+        total_reward=total_reward,
+        efficiency_score=efficiency_score,
+        success_rate=success_rate,
+        action_breakdown=action_breakdown,
+        incident_resolved=env.mitigated,
+        final_grade=final_grade,
+    )
 
 # --- Gradio UI Integration ---
 ui_app = create_gradio_ui(server_url="http://localhost:7860")

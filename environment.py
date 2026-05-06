@@ -9,6 +9,13 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Tuple, Optional, List
 from models import IncidentAction, IncidentObs
 
+# Severity weights by task difficulty
+_SEVERITY_MAP = {
+    "leak-investigation": 0.30,
+    "sqli-detection": 0.60,
+    "backdoor-hunt": 0.90,
+}
+
 # --- ENVIRONMENT ---
 
 TASK_MAP = {
@@ -265,7 +272,8 @@ def sync():
             incident_thread=self.incident_thread + f"\n\n[SITUATION REPORT]: {guidance}",
             status=self.status,
             steps_remaining=self.max_steps - self.steps_taken,
-            reward_signal=float(round(self.reward_total, 2))
+            reward_signal=float(round(self.reward_total, 2)),
+            severity_score=_SEVERITY_MAP.get(self.task, 0.30),
         )
 
     def step(self, action: IncidentAction) -> Tuple[IncidentObs, float, bool, Dict]:
